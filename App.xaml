@@ -433,6 +433,18 @@
             </Setter>
         </Style>
 
+        <!-- WrapPanel for site/game buttons (unused in final layout but kept for potential future use) -->
+        <ItemsPanelTemplate x:Key="SitesWrapPanel">
+            <WrapPanel/>
+        </ItemsPanelTemplate>
+
+        <!-- Style for site/game buttons: based on PrimaryButton. Height fixed, margins for spacing, and stretch horizontally so buttons fill their parent container. -->
+        <Style x:Key="SiteButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+
         <!-- Modern TextBox -->
         <Style x:Key="ModernTextBox" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource CardBg}"/>
@@ -979,71 +991,58 @@
                         </Grid>
 
                         <Grid x:Name="SitesContent" Visibility="Collapsed" Margin="24">
-                          <!-- Define rows: first row for title/description, second row for content -->
-                          <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                          </Grid.RowDefinitions>
+                            <!-- Page header -->
+<Grid.RowDefinitions>
+    <RowDefinition Height="Auto"/>
+    <RowDefinition Height="Auto"/>
+</Grid.RowDefinitions>
 
+                            <!-- Content grid with cards -->
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="32"/> <!-- spacing -->
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
+                                <!-- Left: Sites -->
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource InfoCard}"
+                                        Margin="0">
+                                    <StackPanel>
+                                        <TextBlock Text="Sites"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,12"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                        <StackPanel>
+                                            <Button x:Name="ThePirateCityBtn" Content="ThePirateCity" Tag="https://www.thepiratecity.co/" ToolTip="Cracked software downloads" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="DownloadPirateBtn" Content="DownloadPirate" Tag="https://www.downloadpirate.com/" ToolTip="Pirated software site" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="FileCRBtn" Content="FileCR" Tag="https://filecr.com/us-en/" ToolTip="Safe software with cracks" Style="{StaticResource SiteButtonStyle}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
 
-                          <!-- Content grid with two columns -->
-                          <Grid Grid.Row="1">
-                            <Grid.ColumnDefinitions>
-                              <ColumnDefinition Width="*" />
-                              <ColumnDefinition Width="32" /> <!-- spacing -->
-                              <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- === Left: SITES === -->
-                            <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Top" Margin="0,0,0,24">
-                              <TextBlock Text="Crack Sites" FontSize="20" FontWeight="Bold" Margin="0,0,0,16"/>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <Button x:Name="ThePirateCityBtn" Content="ThePirateCity" Tag="https://www.thepiratecity.co/" Style="{StaticResource PrimaryButton}" ToolTip="Cracked software downloads"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <Button x:Name="DownloadPirateBtn" Content="DownloadPirate" Tag="https://www.downloadpirate.com/" Style="{StaticResource PrimaryButton}" ToolTip="Pirated software site"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <Button x:Name="FileCRBtn" Content="FileCR" Tag="https://filecr.com/us-en/" Style="{StaticResource PrimaryButton}" ToolTip="Safe software with cracks"/>
-                              </StackPanel>
-                            </StackPanel>
-
-                            <!-- Δεξιά: GAMES -->
-                            <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Top">
-                              <TextBlock Text="Crack Games" FontSize="20" FontWeight="Bold" Margin="0,0,0,16"/>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <!-- Button to open Repack-Games; tooltip describes the content -->
-                                <Button x:Name="RepackGamesBtn" Content="Repack-Games" Tag="https://repack-games.com/" Style="{StaticResource PrimaryButton}" ToolTip="Games with built-in crack"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <!-- Button to open SteamUnlocked -->
-                                <Button x:Name="SteamUnlockedBtn" Content="SteamUnlocked" Tag="https://steamunlocked.net/" Style="{StaticResource PrimaryButton}" ToolTip="Pre-installed cracked games"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <!-- Button to open SteamRip -->
-                                <Button x:Name="SteamRipBtn" Content="SteamRip" Tag="https://steamrip.com/" Style="{StaticResource PrimaryButton}" ToolTip="Latest cracked games"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <!-- Button to open FitGirl Repacks -->
-                                <Button x:Name="FitGirlRepacksBtn" Content="FitGirl Repacks" Tag="https://fitgirl-repacks.site/" Style="{StaticResource PrimaryButton}" ToolTip="Highly compressed repacks"/>
-                              </StackPanel>
-
-                              <StackPanel Orientation="Vertical" Margin="0,0,0,12">
-                                <!-- Button to open Online-Fix -->
-                                <Button x:Name="OnlineFixBtn" Content="Online-Fix" Tag="https://online-fix.me/" Style="{StaticResource PrimaryButton}" ToolTip="Multiplayer cracked games"/>
-                              </StackPanel>
-                            </StackPanel>
-                          </Grid>
-
-                          <!-- End content grid -->
+                                <!-- Right: Games -->
+                                <Border Grid.Column="2"
+                                        Style="{StaticResource InfoCard}"
+                                        Margin="0">
+                                    <StackPanel>
+                                        <TextBlock Text="Games"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,12"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                        <StackPanel>
+                                            <Button x:Name="RepackGamesBtn" Content="Repack-Games" Tag="https://repack-games.com/" ToolTip="Games with built-in crack" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="SteamUnlockedBtn" Content="SteamUnlocked" Tag="https://steamunlocked.net/" ToolTip="Pre-installed cracked games" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="SteamRipBtn" Content="SteamRip" Tag="https://steamrip.com/" ToolTip="Latest cracked games" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="FitGirlRepacksBtn" Content="FitGirl Repacks" Tag="https://fitgirl-repacks.site/" ToolTip="Highly compressed repacks" Style="{StaticResource SiteButtonStyle}"/>
+                                            <Button x:Name="OnlineFixBtn" Content="Online-Fix" Tag="https://online-fix.me/" ToolTip="Multiplayer cracked games" Style="{StaticResource SiteButtonStyle}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
                         </Grid>
 
 
@@ -1077,7 +1076,8 @@
     </ScrollViewer>
 
     <!-- Progress Section -->
-    <Border Grid.Row="2" Background="{DynamicResource CardBg}" Padding="16" Margin="16,0,16,16" CornerRadius="12">
+<Border Grid.Row="2" Background="{DynamicResource CardBg}" Padding="16" Margin="16,0,16,40" CornerRadius="12">
+
         <StackPanel>
             <TextBlock Text="Πρόοδος Λήψεων" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{DynamicResource TextBrush}"/>
             
@@ -1150,25 +1150,146 @@
                             </ScrollViewer>
                         </Grid>
 
-                        <!-- Password Manager Page -->
                         <Grid x:Name="PasswordManagerContent" Visibility="Collapsed">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
-                                <StackPanel Margin="24">
-                                    <TextBlock x:Name="PasswordManagerTitle" Text="Password Manager" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
-                                    <TextBlock x:Name="PasswordManagerDesc" Text="Ασφαλής διαχείριση κωδικών πρόσβασης μέσα από το πρόγραμμα." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-                                    <Button x:Name="OpenPasswordManagerBtn" Content="Άνοιγμα Password Manager" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
-                                </StackPanel>
+                                <!-- Κοντέινερ πλήρους πλάτους: γεμίζει τον διαθέσιμο χώρο σε όλες τις αναλύσεις -->
+                                <Grid Margin="24">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="12"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Header (τίτλος & περιγραφή) -->
+                                    <StackPanel Grid.Row="0" Orientation="Vertical">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                                            <Path Width="20" Height="20" Stretch="Uniform" Margin="0,0,8,0"
+                                                  Fill="{DynamicResource Primary}"
+                                                  Data="M12,17 L12,11 C12,8.24 14.24,6 17,6 C19.76,6 22,8.24 22,11 L22,17 L24,17 C25.1046,17 26,17.8954 26,19 L26,28 C26,29.1046 25.1046,30 24,30 L10,30 C8.89543,30 8,29.1046 8,28 L8,19 C8,17.8954 8.89543,17 10,17 L12,17 Z M20,17 L14,17 L14,11 C14,9.34 15.34,8 17,8 C18.66,8 20,9.34 20,11 L20,17 Z"/>
+                                            <TextBlock x:Name="PasswordManagerTitle"
+                                                       Text="Password Manager"
+                                                       FontSize="24" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="PasswordManagerDesc"
+                                                   Text="Ασφαλής διαχείριση κωδικών πρόσβασης μέσα από το πρόγραμμα."
+                                                   Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                                                        <!-- Κάρτα: περιεχόμενο με διακριτικό visual που δεν επηρεάζει τη διάταξη -->
+                                    <Border Grid.Row="2"
+                                            Background="{DynamicResource CardBg}"
+                                            BorderBrush="{DynamicResource BorderBr}"
+                                            BorderThickness="1"
+                                            CornerRadius="12"
+                                            Padding="18">
+                                        <!-- Το Grid χρησιμοποιείται για layering: το διακοσμητικό οπτικό στοιχείο βρίσκεται στο παρασκήνιο και δεν καταλαμβάνει χώρο, ενώ το περιεχόμενο τοποθετείται πάνω από αυτό -->
+                                        <Grid ClipToBounds="True">
+                                            <!-- Διακοσμητική ελλειπτική μορφή που θολώνει ελαφρά και γεμίζει τον χώρο στα δεξιά σε υψηλές αναλύσεις. Στο μικρό πλάτος κόβεται χωρίς να επηρεάζει το περιεχόμενο. -->
+                                            <Ellipse Width="420"
+                                                     Height="420"
+                                                     Fill="#0F4A8BFF"
+                                                     HorizontalAlignment="Right"
+                                                     VerticalAlignment="Top"
+                                                     Margin="0,-180,-120,0">
+                                                <Ellipse.Effect>
+                                                    <BlurEffect Radius="45"/>
+                                                </Ellipse.Effect>
+                                            </Ellipse>
+                                            <!-- Διακοσμητικό εικονίδιο λουκέτου στο παρασκήνιο. Τοποθετείται κάτω δεξιά για να δίνει βάρος σε μεγάλες αναλύσεις -->
+                                            <Path Data="M12,17 L12,11 C12,8.24 14.24,6 17,6 C19.76,6 22,8.24 22,11 L22,17 L24,17 C25.1046,17 26,17.8954 26,19 L26,28 C26,29.1046 25.1046,30 24,30 L10,30 C8.89543,30 8,29.1046 8,28 L8,19 C8,17.8954 8.89543,17 10,17 L12,17 Z M20,17 L14,17 L14,11 C14,9.34 15.34,8 17,8 C18.66,8 20,9.34 20,11 L20,17 Z"
+                                                  Stretch="Uniform"
+                                                  Fill="#204A8BFF"
+                                                  Width="160"
+                                                  Height="160"
+                                                  HorizontalAlignment="Right"
+                                                  VerticalAlignment="Bottom"
+                                                  Margin="0,0,-40,-40"/>
+                                            <!-- Περιεχόμενο κάρτας: τίτλος, κουμπί και περιγραφή -->
+                                            <StackPanel Orientation="Vertical"
+                                                        VerticalAlignment="Center"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0">
+                                                <TextBlock Text="Γρήγορη εκκίνηση"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,0,0,8"/>
+                                                <Button x:Name="OpenPasswordManagerBtn"
+                                                        Content="Άνοιγμα Password Manager"
+                                                        Style="{StaticResource PrimaryButton}"
+                                                        Height="42"
+                                                        Width="240"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0,0,0,8"/>
+                                                <TextBlock Text="Ανοίγει σε 1400×800, εμφανίζεται on‑top για 2″ και επαναφέρει την εφαρμογή όταν κλείσει."
+                                                           Foreground="{DynamicResource MutedText}"
+                                                           FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           Width="280"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                             </ScrollViewer>
                         </Grid>
 
                         <!-- ChrisTitus Page -->
                         <Grid x:Name="ChrisTitusContent" Visibility="Collapsed">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
-                                <StackPanel Margin="24">
-                                    <TextBlock x:Name="ChrisTitusTitle" Text="ChrisTitus Tools" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
-                                    <TextBlock x:Name="ChrisTitusDesc" Text="Εργαλεία από τον Chris Titus για βελτιστοποίηση και παραμετροποίηση των Windows." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-                                    <Button x:Name="RunChrisTitusBtn" Content="Εκτέλεση ChrisTitus Tool" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
-                                </StackPanel>
+                                <!-- Container similar to Password Manager page -->
+                                <Grid Margin="24">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="12"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <!-- Header (no decorative icon) -->
+                                    <StackPanel Grid.Row="0" Orientation="Vertical">
+                                        <TextBlock x:Name="ChrisTitusTitle"
+                                                   Text="ChrisTitus Tools"
+                                                   FontSize="24"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="ChrisTitusDesc"
+                                                   Text="Εργαλείο για διάγνωση και επιδιόρθωση Windows."
+                                                   Foreground="{DynamicResource MutedText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <!-- Action bar: full-width left aligned -->
+                                    <Border Grid.Row="2"
+                                            Background="{DynamicResource CardBg}"
+                                            BorderBrush="{DynamicResource BorderBr}"
+                                            BorderThickness="1"
+                                            CornerRadius="12"
+                                            Padding="16"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel Orientation="Vertical">
+                                            <TextBlock Text="Γρήγορη εκκίνηση"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,0,0,8"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="12"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Button -->
+                                                <Button x:Name="RunChrisTitusBtn"
+                                                        Content="Εκτέλεση εργαλείου"
+                                                        Style="{StaticResource PrimaryButton}"
+                                                        Height="40"
+                                                        Width="240"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Center"
+                                                        Grid.Column="0"/>
+                                                <!-- Description -->
+                                                <TextBlock Grid.Column="2"
+                                                           Text="Ανοίγει κονσόλα PowerShell στο κέντρο."
+                                                           Foreground="{DynamicResource MutedText}"
+                                                           VerticalAlignment="Center"
+                                                           TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
                             </ScrollViewer>
                         </Grid>
 

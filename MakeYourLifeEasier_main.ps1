@@ -51,6 +51,13 @@ $SoundFilePath = Join-Path $AppDir 'click.wav'
 $IconFilePath  = Join-Path $AppDir 'hacker.ico'
 if (-not (Test-Path $AppDir)) { New-Item -ItemType Directory -Force -Path $AppDir | Out-Null }
 
+# -------------------- WebView2 cache paths --------------------
+# To avoid downloading the WebView2 NuGet package on every run, cache
+# the package and its extracted DLLs under the application data folder.
+$WebView2LibDir   = Join-Path $AppDir 'WebView2Lib'
+$WebView2PkgPath  = Join-Path $WebView2LibDir 'Microsoft.Web.WebView2.nupkg'
+$WebView2PkgUnzip = Join-Path $WebView2LibDir 'pkg'
+
 # -------------------- Download Icon if Missing --------------------
 function Get-Icon {
     if (-not (Test-Path $IconFilePath)) {
@@ -62,6 +69,173 @@ function Get-Icon {
     }
 }
 Get-Icon
+
+# -------------------- WebView2 helper functions --------------------
+#
+# Test-WebView2Runtime: checks if the Microsoft Edge WebView2 runtime is
+# installed by looking for its registry key. Returns $true if found,
+# otherwise $false.
+function Test-WebView2Runtime {
+    # The runtime registers itself under this CLSID; check both 64- and 32-bit hives
+    $key64 = 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    $key32 = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    # Evaluate each Test-Path separately to avoid accidental parameter name parsing (PSScriptAnalyzer rule)
+    $exists64 = Test-Path -Path $key64
+    $exists32 = Test-Path -Path $key32
+    return ($exists64 -or $exists32)
+}
+
+# Import-WebView2Assemblies: downloads and unpacks the WebView2 NuGet package
+# into the cached directory under $AppDir and loads the required DLLs into
+# the current session. This runs only when needed.
+function Import-WebView2Assemblies {
+    # Ensure base directory exists
+    if (-not (Test-Path $WebView2LibDir)) { New-Item -ItemType Directory -Force -Path $WebView2LibDir | Out-Null }
+    # Download the package if missing
+    if (-not (Test-Path $WebView2PkgPath)) {
+        Invoke-WebRequest -Uri 'https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2' -OutFile $WebView2PkgPath -UseBasicParsing
+    }
+    # Extract once
+    if (-not (Test-Path $WebView2PkgUnzip)) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($WebView2PkgPath, $WebView2PkgUnzip)
+    }
+    # Locate the Core and WinForms assemblies
+    $coreDll = Get-ChildItem -Recurse -Path $WebView2PkgUnzip -Filter 'Microsoft.Web.WebView2.Core.dll' | Select-Object -First 1
+    $winDll  = Get-ChildItem -Recurse -Path $WebView2PkgUnzip -Filter 'Microsoft.Web.WebView2.WinForms.dll' |
+               Where-Object { $_.FullName -match 'lib\\net' } | Select-Object -First 1
+    if (-not $coreDll -or -not $winDll) { throw 'Δεν βρέθηκαν οι WebView2 DLLs στο NuGet πακέτο.' }
+    # Load the assemblies; Core must load before WinForms
+    Add-Type -Path $coreDll.FullName
+    Add-Type -Path $winDll.FullName
+}
+
+# Open-PasswordManagerWebView: opens a 1280x720 WinForms window with
+# a WebView2 control navigated to the password manager website. The
+# window is centered on screen and disables the default context menu
+# and developer tools.
+function Open-PasswordManagerWebView {
+    if (-not (Test-WebView2Runtime)) {
+        [System.Windows.MessageBox]::Show(
+            'Λείπει το Microsoft Edge WebView2 Runtime. Εγκατάστησέ το και ξαναπροσπάθησε.',
+            'WebView2',
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Warning
+        ) | Out-Null
+        return
+    }
+
+    Import-WebView2Assemblies
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+
+    # --- Minimize κύριο WPF window & θυμήσου προηγούμενη κατάσταση
+    $prevState = $null
+    if ($null -ne $script:window) {
+        $prevState = $script:window.WindowState
+        $script:window.WindowState = 'Minimized'
+    }
+
+    # --- WebView2 παράθυρο 1400x800, κέντρο
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Password Manager'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $true
+    $form.StartPosition = 'CenterScreen'
+    $form.Size = New-Object System.Drawing.Size(1400, 800)
+
+    # --- Κάν’ το TopMost για 2s
+    $form.TopMost = $true
+    $topTimer = New-Object System.Windows.Forms.Timer
+    $topTimer.Interval = 2000
+    $null = $form.Add_Shown({ param($s,$e) $topTimer.Start() })
+    $null = $topTimer.Add_Tick({
+        param($t,$e)
+        try {
+            $form.TopMost = $false
+        } finally {
+            $t.Stop(); $t.Dispose()
+        }
+    })
+
+    # --- WebView2 control
+    $wv = New-Object Microsoft.Web.WebView2.WinForms.WebView2
+    $wv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $null = $form.Controls.Add($wv)
+
+    $userData = Join-Path $AppDir 'WebView2UserData'
+    if (-not (Test-Path $userData)) { New-Item -ItemType Directory -Force -Path $userData | Out-Null }
+    $props = New-Object Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties
+    $props.UserDataFolder = $userData
+    $wv.CreationProperties = $props
+
+    $null = $wv.add_CoreWebView2InitializationCompleted({
+        param($src, $evt)
+        if ($evt.IsSuccess) {
+            $src.CoreWebView2.Settings.AreDefaultContextMenusEnabled = $false
+            $src.CoreWebView2.Settings.AreDevToolsEnabled = $false
+            $src.CoreWebView2.Navigate('https://password-manager-78x.pages.dev/')
+        }
+    })
+
+    # --- Στο κλείσιμο: επανάφερέ μου το κύριο παράθυρο και φέρ’το μπροστά
+    $null = $form.Add_FormClosed({
+        param($s,$e)
+        if ($null -ne $script:window) {
+            $stateToSet = if ($prevState) { $prevState } else { 'Normal' }
+            $script:window.Dispatcher.Invoke([action]{
+                $script:window.WindowState = $stateToSet
+                $script:window.Activate()
+                $script:window.Topmost = $true
+                $script:window.Topmost = $false
+            })
+        }
+    })
+
+    $null = $wv.EnsureCoreWebView2Async()
+    [void]$form.ShowDialog()
+}
+
+# ----------------------------------------------
+# Helpers to center a PowerShell console window
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class Win32 {
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  public static readonly IntPtr HWND_TOP = new IntPtr(0);
+  public const uint SWP_NOSIZE = 0x0001;
+  public const uint SWP_NOZORDER = 0x0004;
+}
+"@
+
+function Start-CenteredPowerShellCommand {
+  param([Parameter(Mandatory=$true)][string]$Command)
+  Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+  $proc = $null
+  try {
+    $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command',$Command) -WindowStyle Normal -PassThru -ErrorAction Stop
+  } catch {
+    return $null
+  }
+  try {
+    for($i=0; $i -lt 80 -and $proc.MainWindowHandle -eq 0; $i++){ Start-Sleep -Milliseconds 100; $proc.Refresh() }
+    if($proc -and $proc.MainWindowHandle -ne 0){
+      $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+      [Win32.RECT]$r = New-Object Win32+RECT
+      [void][Win32]::GetWindowRect($proc.MainWindowHandle, [ref]$r)
+      $w = $r.Right - $r.Left
+      $h = $r.Bottom - $r.Top
+      $x = $wa.X + [int](($wa.Width  - $w)/2)
+      $y = $wa.Y + [int](($wa.Height - $h)/2)
+      [void][Win32]::SetWindowPos($proc.MainWindowHandle, [Win32]::HWND_TOP, $x, $y, 0, 0, [Win32]::SWP_NOSIZE -bor [Win32]::SWP_NOZORDER)
+    }
+  } catch { }
+  return $proc
+}
+
 
 function Set-AppSettings {
     [CmdletBinding()]
@@ -506,20 +680,62 @@ if ($OpenSpotifyBtn) {
     })
 }
 if ($OpenPasswordManagerBtn) {
+    # Launch the in-app Password Manager via WebView2.  Use custom parameter
+    # names to avoid clobbering PowerShell automatic variables ($sender/$args).
     $null = $OpenPasswordManagerBtn.Add_Click({
+        param($src, $evt)
         try {
-            Start-Process 'https://www.lastpass.com/'
+            Open-PasswordManagerWebView
         } catch {
-            [System.Windows.MessageBox]::Show("Δεν ήταν δυνατή η εκκίνηση του διαχειριστή κωδικών.", "Σφάλμα", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            [System.Windows.MessageBox]::Show("Σφάλμα: $($_.Exception.Message)", "Password Manager", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
         }
     })
 }
 if ($RunChrisTitusBtn) {
     $null = $RunChrisTitusBtn.Add_Click({
         try {
-            Start-Process 'https://christitus.com/'
+            # Minimize main window while launching the external console
+            $prevState = $null
+            if ($null -ne $script:window) {
+                $prevState = $script:window.WindowState
+                $script:window.WindowState = [System.Windows.WindowState]::Minimized
+            }
+
+            $proc = Start-CenteredPowerShellCommand 'iwr -useb https://christitus.com/win | iex'
+
+            if (-not $proc) {
+                # Restore window immediately on failure
+                if ($null -ne $script:window) {
+                    $stateToSet = if ($prevState) { $prevState } else { [System.Windows.WindowState]::Normal }
+                    $script:window.WindowState = $stateToSet
+                }
+                [System.Windows.MessageBox]::Show("Δεν ήταν δυνατή η εκτέλεση του εργαλείου Chris Titus.", "Σφάλμα", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+                return
+            }
+
+            # Restore main window when the process exits
+            $proc.EnableRaisingEvents = $true
+            $null = $proc.add_Exited({
+                $script:window.Dispatcher.Invoke([action]{
+                    $restore = if ($prevState) { $prevState } else { [System.Windows.WindowState]::Normal }
+                    if ($restore -eq [System.Windows.WindowState]::Maximized) {
+                        # Force re-maximize by toggling through Normal
+                        $script:window.WindowState = [System.Windows.WindowState]::Normal
+                        $script:window.WindowState = [System.Windows.WindowState]::Maximized
+                    } else {
+                        $script:window.WindowState = $restore
+                    }
+                    $script:window.Activate()
+                    $script:window.Topmost = $true
+                    # Keep window topmost for 2 seconds then reset
+                    $timer = New-Object System.Windows.Threading.DispatcherTimer
+                    $timer.Interval = [TimeSpan]::FromSeconds(2)
+                    $null = $timer.Add_Tick({ param($s,$e) $script:window.Topmost = $false; $s.Stop() })
+                    $timer.Start()
+                })
+            })
         } catch {
-            [System.Windows.MessageBox]::Show("Δεν ήταν δυνατή η εκκίνηση της σελίδας Chris Titus.", "Σφάλμα", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            # suppress non-fatal errors
         }
     })
 }
@@ -1403,7 +1619,14 @@ function Install-AppPackage {
         if (Test-Path $FilePath) { Remove-Item $FilePath -Force }
         $msi = Join-Path $extractDir 'advancedinstaller.msi'
         if (-not (Test-Path $msi)) {
-            [System.Windows.MessageBox]::Show($OwnerWindow, 'Δεν βρέθηκε advancedinstaller.msi μετά το extract.', 'Σφάλμα', 'OK', 'Error') | Out-Null
+            # Use enumeration values for the button and icon to avoid parameter parsing errors
+            [System.Windows.MessageBox]::Show(
+                $OwnerWindow,
+                'Δεν βρέθηκε advancedinstaller.msi μετά το extract.',
+                'Σφάλμα',
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            ) | Out-Null
             return
         }
         $proc = Start-Process -FilePath $msi -PassThru
@@ -1429,7 +1652,13 @@ function Start-AppBatch {
     )
 
     if ($AppNames.Count -eq 0) {
-        [System.Windows.MessageBox]::Show($OwnerWindow, 'Δεν έχεις επιλέξει εφαρμογές.', 'Προσοχή', 'OK', 'Warning') | Out-Null
+        [System.Windows.MessageBox]::Show(
+            $OwnerWindow,
+            'Δεν έχεις επιλέξει εφαρμογές.',
+            'Προσοχή',
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Warning
+        ) | Out-Null
         return
     }
 
@@ -1439,7 +1668,13 @@ function Start-AppBatch {
     foreach ($app in $AppNames) {
 
         if (-not $script:DownloadLinks.Contains($app)) {
-            [System.Windows.MessageBox]::Show($OwnerWindow, "Άγνωστη εφαρμογή: $app", 'Σφάλμα', 'OK', 'Error') | Out-Null
+            [System.Windows.MessageBox]::Show(
+                $OwnerWindow,
+                "Άγνωστη εφαρμογή: $app",
+                'Σφάλμα',
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            ) | Out-Null
             continue
         }
 
@@ -1462,7 +1697,14 @@ function Start-AppBatch {
             Show-Toast "Ολοκληρώθηκε η λήψη: $app" 1200 $false
         }
         catch {
-            [System.Windows.MessageBox]::Show($OwnerWindow, "Σφάλμα λήψης ${app}:`n$($_.Exception.Message)", 'Σφάλμα', 'OK', 'Error') | Out-Null
+            # Use enumeration values for the buttons and icon to avoid parameter parsing errors
+            [System.Windows.MessageBox]::Show(
+                $OwnerWindow,
+                "Σφάλμα λήψης ${app}:`n$($_.Exception.Message)",
+                'Σφάλμα',
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            ) | Out-Null
             $ProgressBar.Dispatcher.Invoke([action]{ $ProgressBar.IsIndeterminate = $false; $ProgressBar.Value = 0 })
             $StatusTextBlock.Dispatcher.Invoke([action]{ $StatusTextBlock.Text = '' })
             continue
@@ -1482,7 +1724,14 @@ function Start-AppBatch {
             Show-Toast "Ολοκληρώθηκε η εγκατάσταση: $app" 1200 $false
         }
         catch {
-            [System.Windows.MessageBox]::Show($OwnerWindow, "Σφάλμα εγκατάστασης ${app}:`n$($_.Exception.Message)", 'Σφάλμα', 'OK', 'Error') | Out-Null
+            # Use enumeration values for the buttons and icon to avoid parameter parsing errors
+            [System.Windows.MessageBox]::Show(
+                $OwnerWindow,
+                "Σφάλμα εγκατάστασης ${app}:`n$($_.Exception.Message)",
+                'Σφάλμα',
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            ) | Out-Null
         }
         finally {
             $ProgressBar.Dispatcher.Invoke([action]{ $ProgressBar.IsIndeterminate = $false; $ProgressBar.Value = 0 })
@@ -2043,6 +2292,19 @@ $null = $window.Add_Closing({
         $script:AppsWebClients.Clear()
     } catch {}
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
