@@ -51,6 +51,95 @@ $SoundFilePath = Join-Path $AppDir 'click.wav'
 $IconFilePath  = Join-Path $AppDir 'hacker.ico'
 if (-not (Test-Path $AppDir)) { New-Item -ItemType Directory -Force -Path $AppDir | Out-Null }
 
+<#
+Utility functions for downloading files and working with the Kolokithes A.E data directory.
+These helpers ensure that all downloads (executables, images, etc.) are stored under
+%APPDATA%\Kolokithes A.E and that this directory is created if it does not exist.
+-- Get-KolokithesDataRoot: returns the path to the application data root, creating
+   the folder if necessary.
+-- Get-DownloadPath: given a filename, returns its full path inside the data root.
+-- Invoke-FileDownload: downloads a file from a URL to a destination path, using
+   Invoke-WebRequest and falling back to WebClient when necessary.
+-- Initialize-ActivationImages: downloads the Activate/AutoLogin images from the
+   remote repository if they are missing, then applies them to the corresponding
+   image borders in the UI.  This should be called after the XAML is loaded.
+#>
+function Get-KolokithesDataRoot {
+    $root = Join-Path $env:APPDATA 'Kolokithes A.E'
+    if (-not (Test-Path $root)) {
+        try { New-Item -ItemType Directory -Force -Path $root | Out-Null } catch {}
+    }
+    return $root
+}
+
+function Get-DownloadPath {
+    param([Parameter(Mandatory)][string]$FileName)
+    $root = Get-KolokithesDataRoot
+    return Join-Path $root $FileName
+}
+
+function Invoke-FileDownload {
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$Destination
+    )
+    # Ensure destination directory exists
+    $destDir = Split-Path -Parent $Destination
+    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+    try {
+        Invoke-WebRequest -Uri $Uri -OutFile $Destination -UseBasicParsing -ErrorAction Stop
+    } catch {
+        # Fallback to WebClient if Invoke-WebRequest fails (PowerShell 5 compatibility)
+        try {
+            $client = New-Object System.Net.WebClient
+            $client.Headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            $client.DownloadFile($Uri, $Destination)
+            $client.Dispose()
+        } catch {
+            throw $_
+        }
+    }
+    return $Destination
+}
+
+function Initialize-ActivationImages {
+    # Download and set the images for the AutoLogin and Activate cards if missing.
+    # This runs after the XAML is loaded so we can find controls by name.
+    if (-not $window) { return }
+    $autoLoginBorder = $window.FindName('AutoLoginImageBorder')
+    $activateBorder  = $window.FindName('ActivateImageBorder')
+    $autoPath    = Get-DownloadPath 'autologin.png'
+    $activatePath = Get-DownloadPath 'activate.png'
+    # Download missing images from GitHub
+    if (-not (Test-Path $autoPath)) {
+        try { Invoke-FileDownload -Uri 'https://raw.githubusercontent.com/thomasthanos/pc-restore/main/images/autologin.png' -Destination $autoPath | Out-Null } catch {}
+    }
+    if (-not (Test-Path $activatePath)) {
+        try { Invoke-FileDownload -Uri 'https://raw.githubusercontent.com/thomasthanos/pc-restore/main/images/activate.png' -Destination $activatePath | Out-Null } catch {}
+    }
+    # Create brushes and set backgrounds if controls exist and images exist
+    try {
+        if ($autoLoginBorder -and (Test-Path $autoPath)) {
+            $img1 = New-Object System.Windows.Media.Imaging.BitmapImage
+            $img1.BeginInit(); $img1.UriSource = New-Object System.Uri($autoPath); $img1.DecodePixelWidth = 320; $img1.EndInit()
+            $brush1 = New-Object System.Windows.Media.ImageBrush
+            $brush1.ImageSource = $img1
+            $brush1.Stretch = [System.Windows.Media.Stretch]::UniformToFill
+            $autoLoginBorder.Background = $brush1
+        }
+        if ($activateBorder -and (Test-Path $activatePath)) {
+            $img2 = New-Object System.Windows.Media.Imaging.BitmapImage
+            $img2.BeginInit(); $img2.UriSource = New-Object System.Uri($activatePath); $img2.DecodePixelWidth = 320; $img2.EndInit()
+            $brush2 = New-Object System.Windows.Media.ImageBrush
+            $brush2.ImageSource = $img2
+            $brush2.Stretch = [System.Windows.Media.Stretch]::UniformToFill
+            $activateBorder.Background = $brush2
+        }
+    } catch {
+        # ignore any image loading errors
+    }
+}
+
 # -------------------- WebView2 cache paths --------------------
 # To avoid downloading the WebView2 NuGet package on every run, cache
 # the package and its extracted DLLs under the application data folder.
@@ -348,6 +437,33 @@ $simsBtn            = $window.FindName('SimsBtn')
 $script:AppsDownloadsPanel  = $window.FindName('AppsButtonsPanel')
 $script:AppsOverallProgress = $window.FindName('AppsOverallProgressBar')
 $script:AppsStatusText      = $window.FindName('AppsStatusText')
+
+# Additional controls for dynamic spacing on the Apps page
+$script:AppsStack        = $window.FindName('AppsStack')
+$script:AppsProgressCard = $window.FindName('AppsProgressCard')
+
+# Define a helper to adjust spacing based on the window height
+function Update-AppsSpacing {
+    try {
+        $height = [int]$window.ActualHeight
+        if ($height -le 520) {
+            # On very small heights (~480p), keep a 10px gap for the progress bar and align the top of the buttons with the menu
+            if ($script:AppsProgressCard) { $script:AppsProgressCard.Margin = '0,10,0,16' }
+            if ($script:AppsStack)        { $script:AppsStack.Margin        = '24,24,24,0' }
+        } else {
+            # On 720p/1080p, provide a 100px gap and larger top margin
+            if ($script:AppsProgressCard) { $script:AppsProgressCard.Margin = '0,100,0,16' }
+            if ($script:AppsStack)        { $script:AppsStack.Margin        = '24,32,24,0' }
+        }
+    } catch {
+        # Ignore any errors from sizing logic
+    }
+}
+
+# Initialize spacing immediately once the window is created
+$null = $window.Add_SourceInitialized({ Update-AppsSpacing })
+# Update spacing when the window size changes
+$null = $window.Add_SizeChanged({ Update-AppsSpacing })
 $null = $appsBtn.Add_Click({ Show-Content 'Apps'; Initialize-AppsPageUI })
 $null = $appsBtn.Add_Click({ Show-Content 'Apps' })
 
@@ -456,12 +572,31 @@ $RunSimsDlcBtn          = $window.FindName('RunSimsDlcBtn')
         $null = $SpicetifyInstallBtn.Add_Click({
             # Use custom parameter names to avoid clobbering PowerShell's automatic $sender/$args variables.
             param($src, $evtArgs)
-            Update-SpicetifyStatus "Starting Spicetify installation..."
+            # Use translated message for starting Spicetify installation if available.
+            try {
+                $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spicetifyInstallStart')) {
+                    Update-SpicetifyStatus ($i18n[$code].spicetifyInstallStart)
+                } else {
+                    Update-SpicetifyStatus "Starting Spicetify installation..."
+                }
+            } catch {
+                Update-SpicetifyStatus "Starting Spicetify installation..."
+            }
 
             # Check if Spotify is installed before attempting to install Spicetify.
             # Use Join-Path to build the path without expanding environment variables inside a double-quoted string.
             if (-not (Test-Path (Join-Path $env:APPDATA 'Spotify'))) {
-                Update-SpicetifyStatus "Spotify not found. Please install Spotify first."
+                try {
+                    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                    if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spotifyNotFoundForSpicetifyInstall')) {
+                        Update-SpicetifyStatus ($i18n[$code].spotifyNotFoundForSpicetifyInstall)
+                    } else {
+                        Update-SpicetifyStatus "Spotify not found. Please install Spotify first."
+                    }
+                } catch {
+                    Update-SpicetifyStatus "Spotify not found. Please install Spotify first."
+                }
                 return
             }
 
@@ -537,11 +672,30 @@ $RunSimsDlcBtn          = $window.FindName('RunSimsDlcBtn')
     if ($SpicetifyUninstallBtn) {
         $null = $SpicetifyUninstallBtn.Add_Click({
             param($src, $evtArgs)
-            Update-SpicetifyStatus 'Starting Spicetify uninstallation...'
+            # Use translated message for starting Spicetify uninstallation if available.
+            try {
+                $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spicetifyUninstallStart')) {
+                    Update-SpicetifyStatus ($i18n[$code].spicetifyUninstallStart)
+                } else {
+                    Update-SpicetifyStatus 'Starting Spicetify uninstallation...'
+                }
+            } catch {
+                Update-SpicetifyStatus 'Starting Spicetify uninstallation...'
+            }
 
             # Ensure Spicetify is present before attempting removal.
             if (-not (Test-Path (Join-Path $env:APPDATA 'spicetify')) -and -not (Test-Path (Join-Path $env:LOCALAPPDATA 'spicetify'))) {
-                Update-SpicetifyStatus 'Spicetify not found. Nothing to uninstall.'
+                try {
+                    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                    if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spicetifyNotFound')) {
+                        Update-SpicetifyStatus ($i18n[$code].spicetifyNotFound)
+                    } else {
+                        Update-SpicetifyStatus 'Spicetify not found. Nothing to uninstall.'
+                    }
+                } catch {
+                    Update-SpicetifyStatus 'Spicetify not found. Nothing to uninstall.'
+                }
                 return
             }
 
@@ -602,11 +756,30 @@ $RunSimsDlcBtn          = $window.FindName('RunSimsDlcBtn')
     if ($SpicetifyFullUninstallBtn) {
         $null = $SpicetifyFullUninstallBtn.Add_Click({
             param($src, $evtArgs)
-            Update-SpicetifyStatus 'Starting Spotify complete uninstallation...'
+            # Use translated message for starting complete Spotify uninstallation if available.
+            try {
+                $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spicetifyFullUninstallStart')) {
+                    Update-SpicetifyStatus ($i18n[$code].spicetifyFullUninstallStart)
+                } else {
+                    Update-SpicetifyStatus 'Starting Spotify complete uninstallation...'
+                }
+            } catch {
+                Update-SpicetifyStatus 'Starting Spotify complete uninstallation...'
+            }
 
             # Verify Spotify is installed before attempting full removal.
             if (-not (Test-Path (Join-Path $env:APPDATA 'Spotify')) -and -not (Test-Path (Join-Path $env:LOCALAPPDATA 'Spotify'))) {
-                Update-SpicetifyStatus 'Spotify not found. Nothing to uninstall.'
+                try {
+                    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                    if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('spotifyNotFound')) {
+                        Update-SpicetifyStatus ($i18n[$code].spotifyNotFound)
+                    } else {
+                        Update-SpicetifyStatus 'Spotify not found. Nothing to uninstall.'
+                    }
+                } catch {
+                    Update-SpicetifyStatus 'Spotify not found. Nothing to uninstall.'
+                }
                 return
             }
 
@@ -876,8 +1049,8 @@ $WinActivateBtn      = $window.FindName('WinActivateBtn')
 $ActivateProgressBar = $window.FindName('ActivateProgressBar')
 $ActivateStatusText  = $window.FindName('ActivateStatusText')
 # Use Border elements for the AutoLogin and Activate images so we can apply rounded corners via ImageBrush
-$AutoLoginImageBorder = $window.FindName('AutoLoginImageBorder')
-$ActivateImageBorder  = $window.FindName('ActivateImageBorder')
+# Remove unused border variables; call Initialize-ActivationImages to download and apply images
+Initialize-ActivationImages
 
 # Controls for the Maintenance page
 $DeleteTempBtn        = $window.FindName('DeleteTempBtn')
@@ -887,35 +1060,7 @@ $MaintenanceProgressBar = $window.FindName('MaintenanceProgressBar')
 $MaintenanceStatusText  = $window.FindName('MaintenanceStatusText')
 
 
-# Load images for the Activate/Autologin cards if available
-try {
-    # AutoLogin image
-    if ($AutoLoginImageBorder -and (Test-Path (Join-Path $PSScriptRoot 'autologin.png'))) {
-        $img1 = New-Object System.Windows.Media.Imaging.BitmapImage
-        $img1.BeginInit();
-        $img1.UriSource = New-Object System.Uri((Join-Path $PSScriptRoot 'autologin.png'))
-        $img1.DecodePixelWidth = 320
-        $img1.EndInit()
-        $brush1 = New-Object System.Windows.Media.ImageBrush
-        $brush1.ImageSource = $img1
-        $brush1.Stretch = [System.Windows.Media.Stretch]::UniformToFill
-        $AutoLoginImageBorder.Background = $brush1
-    }
-    # Activate image
-    if ($ActivateImageBorder -and (Test-Path (Join-Path $PSScriptRoot 'activate.png'))) {
-        $img2 = New-Object System.Windows.Media.Imaging.BitmapImage
-        $img2.BeginInit();
-        $img2.UriSource = New-Object System.Uri((Join-Path $PSScriptRoot 'activate.png'))
-        $img2.DecodePixelWidth = 320
-        $img2.EndInit()
-        $brush2 = New-Object System.Windows.Media.ImageBrush
-        $brush2.ImageSource = $img2
-        $brush2.Stretch = [System.Windows.Media.Stretch]::UniformToFill
-        $ActivateImageBorder.Background = $brush2
-    }
-} catch {
-    # ignore image loading errors
-}
+# Remove the old image loading logic; images are now handled by Initialize-ActivationImages
 
 # -------------------- Set Icon in Titlebar --------------------
 if (Test-Path $IconFilePath) {
@@ -927,93 +1072,24 @@ if (Test-Path $IconFilePath) {
 }
 
 # -------------------- i18n dictionaries --------------------
-$i18n = @{
-  "el" = @{
-    title="Κάνε τη Ζωή σου Πιο Εύκολη"
-    menu="Μενού"
-    profile="Προφίλ"; install="Εγκατάσταση Εφαρμογών"; activate="Ενεργοποίηση/Αυτόματη Σύνδεση"
-    maintenance="Συντήρηση Συστήματος"; sites="Ιστότοποι"; apps="Εφαρμογές"; info="Πληροφορίες"
+# Define an empty dictionary; it will be populated from the external i18n.psd1 file.
+$i18n = @{}
 
-    profileTitle="Ρυθμίσεις Προφίλ"
-    displayTitle="Ρυθμίσεις Οθόνης"
-    resolution="Ανάλυση παραθύρου:"
-    theme="Θέμα:"
-
-    personalization="Εξατομίκευση"
-    username="Όνομα χρήστη:"
-    language="Γλώσσα:"
-
-    notifications="Ειδοποιήσεις"
-    notifEnabled="Ενεργοποιημένες ειδοποιήσεις:"
-    sound="Ήχος ειδοποιήσεων:"
-    save="Αποθήκευση Ρυθμίσεων"
-    reset="Επαναφορά"
-    installTitle="Εγκατάσταση εφαρμογών"
-    installDesc="Εδώ μπαίνουν installers και silent switches."
-    activateTitle="Ενεργοποίηση / Αυτόματη Σύνδεση"
-    activateDesc="Ρυθμίσεις αυτόματης σύνδεσης και ενεργοποιήσεων."
-    maintenanceTitle="Συντήρηση Συστήματος"
-    maintenanceDesc="Cleanup, ενημερώσεις, restore points κ.λπ."
-    sitesTitle="Ιστότοποι"; sitesDesc="Συνδέσεις σε αγαπημένες ιστοσελίδες."
-    infoTitle="Πληροφορίες"
-    infoDesc="Η εφαρμογή συγκεντρώνει καθημερινές εργασίες σε ένα σημείο — για να σου κάνει τη ζωή πιο εύκολη."
-    version="Έκδοση: 2.0.0"
-    copyright="© 2025 Make Your Life Easier"
-    savedMsg="Οι ρυθμίσεις αποθηκεύτηκαν με επιτυχία!"
-    savedTitle="Αποθήκευση"
-    lightText="Φωτεινό"; darkText="Σκοτεινό"
-    notifOn="Οι ειδοποιήσεις ενεργοποιήθηκαν"
-    notifOff="Οι ειδοποιήσεις απενεργοποιήθηκαν"
-    soundOn="Ο ήχος ειδοποιήσεων ενεργοποιήθηκε"
-    soundOff="Ο ήχος ειδοποιήσεων απενεργοποιήθηκε"
-    toastTest="Δοκιμαστική ειδοποίηση"
-    disabledNote="Οι ειδοποιήσεις είναι απενεργοποιημένες"
-    downloadingSound="Λήψη ήχου από Dropbox..."
-    downloadingIcon="Λήψη εικονιδίου από Dropbox..."
-    noAppsSelected="Δεν έχεις επιλέξει εφαρμογές"
-    installError="Σφάλμα εγκατάστασης"
-  }
-  "en" = @{
-    title="Make Your Life Easier"
-    menu="Menu"
-    profile="Profile"; install="Install Apps"; activate="Activate/Autologin"
-    maintenance="System Maintenance"; sites="Sites"; apps="Apps"; info="Info"
-    profileTitle="Profile Settings"
-    displayTitle="Display Settings"
-    resolution="Window resolution:"
-    theme="Theme:"
-    personalization="Personalization"
-    username="Username:"
-    language="Language:"
-    notifications="Notifications"
-    notifEnabled="Enable notifications:"
-    sound="Notification sound:"
-    save="Save Settings"
-    reset="Reset"
-    installTitle="Install Apps"
-    installDesc="Place installers and silent switches here."
-    activateTitle="Activate / Autologin"
-    activateDesc="Configure automatic sign-in and activations."
-    maintenanceTitle="System Maintenance"
-    maintenanceDesc="Cleanup, updates, restore points, etc."
-    infoTitle="Information"
-    infoDesc="This app brings common tasks together to make your life easier."
-    version="Version: 2.0.0"
-    copyright="© 2025 Make Your Life Easier"
-    savedMsg="Settings saved successfully!"
-    savedTitle="Save"
-    lightText="Light"; darkText="Dark"
-    notifOn="Notifications enabled"
-    notifOff="Notifications disabled"
-    soundOn="Notification sound enabled"
-    soundOff="Notification sound disabled"
-    toastTest="Test notification"
-    disabledNote="Notifications are disabled"
-    downloadingSound="Downloading sound from Dropbox..."
-    downloadingIcon="Downloading icon from Dropbox..."
-    noAppsSelected="No apps selected"
-    installError="Installation error"
-  }
+# Attempt to import translations from an external PowerShell data file (i18n.psd1).
+# If the file is missing or fails to load, the $i18n variable will remain empty.
+$translationsPath = Join-Path $PSScriptRoot 'i18n.psd1'
+if (Test-Path $translationsPath) {
+    try {
+        $fileTranslations = Import-PowerShellDataFile -Path $translationsPath
+        if ($fileTranslations) {
+            $i18n = $fileTranslations
+        }
+    } catch {
+        Write-Host "Failed to import translations file: $($_.Exception.Message)"
+        # leave $i18n as empty; downstream code may fallback to hard-coded keys if needed.
+    }
+} else {
+    Write-Host "Warning: i18n.psd1 not found at $translationsPath. Using built-in English strings only."
 }
 
 # -------------------- Page switching --------------------
@@ -1204,6 +1280,18 @@ function Set-Language([string]$code){
     ($window.FindName('CopyrightLabel')).Text   = $t.copyright
 
     $themeToggleLabel.Text = if ($themeToggle.IsChecked) { $t.darkText } else { $t.lightText }
+
+    # Apply additional translations for new pages and buttons (Spotify, Password Manager,
+    # ChrisTitus Tools, Sims DLC tools, extended install/maintenance controls, etc.).
+    # If a Set-Language_additions.ps1 file exists next to this script, dot-source it.
+    try {
+        $addonPath = Join-Path $PSScriptRoot 'Set-Language_additions.ps1'
+        if (Test-Path $addonPath) {
+            . $addonPath
+        }
+    } catch {
+        Write-Host "Failed to apply Set-Language additions: $($_.Exception.Message)"
+    }
 }
 
 # -------------------- TRUE rounded clip (stable) --------------------
@@ -1758,17 +1846,20 @@ function Invoke-AutoLogin {
     # Downloads the AutoLogin executable and runs it with admin privileges while updating the UI.
     $url = 'https://github.com/thomasthanos/Make_your_life_easier/raw/refs/heads/main/.exe%20files/auto%20login.exe'
     $fileName = [System.IO.Path]::GetFileName(([Uri]$url).AbsolutePath)
-    $tempPath = Join-Path ([System.IO.Path]::GetTempPath()) $fileName
+    # Place the downloaded AutoLogin executable into the Kolokithes A.E data folder
+    $destPath = Get-DownloadPath $fileName
     try {
         # Ensure progress bar visible and start download
         $StatusTextBlock.Dispatcher.Invoke([action]{ $StatusTextBlock.Text = "Σύνδεση στη λήψη: $fileName" })
         $ProgressBar.Dispatcher.Invoke([action]{ $ProgressBar.Visibility = 'Visible'; $ProgressBar.IsIndeterminate = $true; $ProgressBar.Value = 0 })
-        Start-AppFileDownload -Url $url -DestinationPath $tempPath -ProgressBar $ProgressBar -StatusTextBlock $StatusTextBlock
+        # Download the AutoLogin executable into our application data folder
+        Start-AppFileDownload -Url $url -DestinationPath $destPath -ProgressBar $ProgressBar -StatusTextBlock $StatusTextBlock
         # Run the downloaded executable as administrator
         $StatusTextBlock.Dispatcher.Invoke([action]{ $StatusTextBlock.Text = 'Εκτέλεση αρχείου...' })
         $ProgressBar.Dispatcher.Invoke([action]{ $ProgressBar.IsIndeterminate = $true; $ProgressBar.Value = 0 })
         try {
-            $proc = Start-Process -FilePath $tempPath -Verb RunAs -PassThru
+            # Run the downloaded executable (from the application data folder) with administrative privileges
+            $proc = Start-Process -FilePath $destPath -Verb RunAs -PassThru
         } catch {
             throw "Αποτυχία εκτέλεσης ως διαχειριστής: $($_.Exception.Message)"
         }
@@ -1783,7 +1874,7 @@ function Invoke-AutoLogin {
     } finally {
         $ProgressBar.Dispatcher.Invoke([action]{ $ProgressBar.IsIndeterminate = $false; $ProgressBar.Value = 0; $ProgressBar.Visibility = 'Collapsed' })
         $StatusTextBlock.Dispatcher.Invoke([action]{ $StatusTextBlock.Text = '' })
-        try { Remove-Item $tempPath -ErrorAction SilentlyContinue } catch {}
+        # Do not remove the downloaded file; keep it in the application data folder for future use
     }
 }
 
@@ -2025,7 +2116,8 @@ if ($DownloadPatchBtn) {
     $null = $DownloadPatchBtn.Add_Click({
         # Κατεβάζει το Patch My PC με πραγματικό progress και το τρέχει αμέσως μετά
         $url  = 'https://github.com/thomasthanos/Easy_your_Life_byAi/raw/refs/heads/main/apps/exe/patch_my_pc.exe'
-        $dest = Join-Path ([System.IO.Path]::GetTempPath()) 'patch_my_pc.exe'
+        # Store Patch My PC under the Kolokithes A.E data folder rather than the temp folder
+        $dest = Get-DownloadPath 'patch_my_pc.exe'
 
         try {
             # --- UI: Έναρξη ---
@@ -2086,8 +2178,7 @@ if ($DownloadPatchBtn) {
                     $MaintenanceProgressBar.Value = 0
                 })
             }
-            # Προαιρετικά, καθάρισε το προσωρινό exe
-            try { Remove-Item $dest -Force -ErrorAction SilentlyContinue } catch {}
+            # Μην αφαιρείς το εκτελέσιμο· διατήρησέ το στο application data folder για μελλοντική χρήση
         }
     })
 }
@@ -2150,8 +2241,19 @@ function Update-AppsOverallProgress {
         if ($script:AppsOverallProgress) { 
             $script:AppsOverallProgress.Width = 0 
         }
+        # When no downloads are in progress, display the localized "readyToDownload" status
         if ($script:AppsStatusText) { 
-            $script:AppsStatusText.Text = 'Ready to download' 
+            $code = 'en'
+            try {
+                if ($languageCombo -and $languageCombo.SelectedItem) {
+                    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                }
+            } catch {}
+            if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('readyToDownload')) {
+                $script:AppsStatusText.Text = $i18n[$code].readyToDownload
+            } else {
+                $script:AppsStatusText.Text = 'Ready to download'
+            }
         }
         return
     }
@@ -2171,9 +2273,19 @@ function Update-AppsOverallProgress {
             $script:AppsOverallProgress.Width = $newWidth
         }
         
-        # Update status text (μόνο το ποσό των αρχείων, όχι το ποσοστό)
+        # Update status text (number of files downloaded). Use localized format string if available.
         if ($script:AppsStatusText) {
-            $script:AppsStatusText.Text = "Downloaded $completed of $started files"
+            $code = 'en'
+            try {
+                if ($languageCombo -and $languageCombo.SelectedItem) {
+                    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+                }
+            } catch {}
+            if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('downloadedOf')) {
+                $script:AppsStatusText.Text = [string]::Format($i18n[$code].downloadedOf, $completed, $started)
+            } else {
+                $script:AppsStatusText.Text = "Downloaded $completed of $started files"
+            }
         }
     } catch {
         Write-Host "Error updating progress: $($_.Exception.Message)"
@@ -2185,7 +2297,16 @@ function Initialize-AppsPageUI {
     $script:AppsDownloadsPanel.Children.Clear()
     foreach ($k in $script:AppsDownloads.Keys) {
         $btn = New-Object System.Windows.Controls.Button
-        $btn.Content = "Download $k"
+        # Determine current language code for per-app download button label. Falls back to 'en' if language combo not found.
+        $code = 'en'
+        try {
+            if ($languageCombo -and $languageCombo.SelectedItem) {
+                $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+            }
+        } catch {}
+        # Format the button content using the downloadAppBtn template from i18n. If the key is missing, default to "Download <AppName>".
+        $template = if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('downloadAppBtn')) { $i18n[$code].downloadAppBtn } else { 'Download {0}' }
+        $btn.Content = [string]::Format($template, $k)
         $btn.Tag     = $k
         $btn.Margin  = [System.Windows.Thickness]::new(6)
         try { $btn.Style = $window.FindResource('PillButton') } catch {}
@@ -2195,7 +2316,20 @@ function Initialize-AppsPageUI {
         })
         [void]$script:AppsDownloadsPanel.Children.Add($btn)
     }
-    if ($script:AppsStatusText) { $script:AppsStatusText.Text = 'Ready to download' }
+    # Set initial status text to the localized "readyToDownload" string
+    if ($script:AppsStatusText) {
+        $code = 'en'
+        try {
+            if ($languageCombo -and $languageCombo.SelectedItem) {
+                $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+            }
+        } catch {}
+        if ($i18n.ContainsKey($code) -and $i18n[$code].ContainsKey('readyToDownload')) {
+            $script:AppsStatusText.Text = $i18n[$code].readyToDownload
+        } else {
+            $script:AppsStatusText.Text = 'Ready to download'
+        }
+    }
     if ($script:AppsOverallProgress) {
         $script:AppsOverallProgress.Width = 0
     }

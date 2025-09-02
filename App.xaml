@@ -853,7 +853,7 @@
 
                                         <!-- Available -->
                                         <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                            <TextBlock Text="Διαθέσιμες" FontWeight="SemiBold" Margin="0,0,0,6"/>
+        <TextBlock x:Name="AvailableLabel" Text="Διαθέσιμες" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                             <ListBox x:Name="AvailableApps" Height="260"
                                                      Style="{StaticResource InstallListBox}"
                                                      ItemContainerStyle="{StaticResource InstallListBoxItem}"
@@ -874,7 +874,7 @@
 
                                         <!-- Selected -->
                                         <StackPanel Grid.Column="2" Margin="8,0,0,0">
-                                            <TextBlock Text="Επιλεγμένες" FontWeight="SemiBold" Margin="0,0,0,6"/>
+        <TextBlock x:Name="SelectedLabel" Text="Επιλεγμένες" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                             <ListBox x:Name="SelectedApps" Height="260"
                                                      Style="{StaticResource InstallListBox}"
                                                      ItemContainerStyle="{StaticResource InstallListBoxItem}"
@@ -958,24 +958,24 @@
                                     <!-- Delete Temporary Files card -->
                                     <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource CardBg}" CornerRadius="12" Padding="16" Margin="0,0,0,16">
                                         <StackPanel>
-                                            <TextBlock Text="Καθαρισμός Temp" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Διαγράφει τα προσωρινά αρχεία (%temp%, C:\\Windows\\Temp, Prefetch)." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                            <TextBlock x:Name="MaintenanceTempTitle" Text="Καθαρισμός Temp" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="MaintenanceTempDesc" Text="Διαγράφει τα προσωρινά αρχεία (%temp%, C:\\Windows\\Temp, Prefetch)." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                             <Button x:Name="DeleteTempBtn" Content="Καθαρισμός Προσωρινών" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Stretch"/>
                                         </StackPanel>
                                     </Border>
                                     <!-- System Scan &amp; Repair card -->
                                     <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource CardBg}" CornerRadius="12" Padding="16" Margin="0,0,0,16">
                                         <StackPanel>
-                                            <TextBlock Text="System Scan &amp; Repair" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Εκτελεί SFC και DISM για έλεγχο και αποκατάσταση των αρχείων συστήματος." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                            <TextBlock x:Name="MaintenanceScanTitle" Text="System Scan &amp; Repair" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="MaintenanceScanDesc" Text="Εκτελεί SFC και DISM για έλεγχο και αποκατάσταση των αρχείων συστήματος." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                             <Button x:Name="SystemScanBtn" Content="Έναρξη Ελέγχου/Επισκευής" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Stretch"/>
                                         </StackPanel>
                                     </Border>
                                     <!-- Download Patch My PC card (spans two columns) -->
                                     <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Background="{DynamicResource CardBg}" CornerRadius="12" Padding="16" Margin="0,0,0,16">
                                         <StackPanel>
-                                            <TextBlock Text="Patch My PC" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Κατεβάζει την εφαρμογή Patch My PC για ενημερώσεις." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                            <TextBlock x:Name="PatchMyPcTitle" Text="Patch My PC" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="PatchMyPcDesc" Text="Κατεβάζει την εφαρμογή Patch My PC για ενημερώσεις." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                             <Button x:Name="DownloadPatchBtn" Content="Λήψη Patch My PC" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Stretch"/>
                                         </StackPanel>
                                     </Border>
@@ -1051,52 +1051,45 @@
 
 
 <Grid x:Name="AppsContent" Visibility="Collapsed">
-    <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
+    <!-- Place all apps and progress content inside a single scroll viewer. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,0,16,16">
+        <!-- StackPanel provides vertical layout; top margin lowers the buttons to align with the left menu -->
+        <StackPanel x:Name="AppsStack" Margin="24,32,24,0">
+            <!-- UniformGrid holds the app buttons. The first row aligns with the first menu item on the left. -->
+            <UniformGrid x:Name="AppsButtonsPanel"
+                         Columns="2"
+                         Margin="0,8,0,0"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Top" />
 
-    <!-- Header -->
-    <StackPanel Grid.Row="0" Margin="24,16,24,8">
-        <TextBlock Text="Εφαρμογές" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
-        <TextBlock Text="Κατέβασε και εγκατέστησε δημοφιλείς εφαρμογές" 
-                   Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-    </StackPanel>
-
-    <!-- Apps Grid -->
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16,0,16,16">
-        <UniformGrid x:Name="AppsButtonsPanel" 
-                   Columns="2"
-                   Margin="0"
-                   HorizontalAlignment="Stretch"
-                   VerticalAlignment="Top">
-            <!-- Buttons will be added programmatically -->
-        </UniformGrid>
-    </ScrollViewer>
-
-    <!-- Progress Section -->
-<Border Grid.Row="2" Background="{DynamicResource CardBg}" Padding="16" Margin="16,0,16,40" CornerRadius="12">
-
-        <StackPanel>
-            <TextBlock Text="Πρόοδος Λήψεων" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{DynamicResource TextBrush}"/>
-            
-            <Border CornerRadius="4" Height="12" Background="{DynamicResource ScrollTrack}">
-                <Border x:Name="AppsOverallProgressBar" 
-                        CornerRadius="4" 
-                        Height="12" 
-                        HorizontalAlignment="Left" 
-                        Width="0" 
-                        Background="{DynamicResource Primary}"/>
+            <!-- Progress Section: default gap of 100px on larger heights (720p/1080p). The gap will be adjusted dynamically in code-behind for 480p. -->
+            <Border x:Name="AppsProgressCard"
+                    Background="{DynamicResource CardBg}"
+                    Padding="16"
+                    Margin="0,100,0,16"
+                    CornerRadius="12">
+                <StackPanel>
+                    <TextBlock x:Name="AppsProgressTitle" Text="Πρόοδος Λήψεων"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <Border CornerRadius="4" Height="12" Background="{DynamicResource ScrollTrack}">
+                        <Border x:Name="AppsOverallProgressBar"
+                                CornerRadius="4"
+                                Height="12"
+                                HorizontalAlignment="Left"
+                                Width="0"
+                                Background="{DynamicResource Primary}"/>
+                    </Border>
+                    <TextBlock x:Name="AppsStatusText"
+                              TextWrapping="Wrap"
+                              Foreground="{DynamicResource MutedText}"
+                              FontSize="13"
+                              Margin="0,6,0,0"/>
+                </StackPanel>
             </Border>
-            
-            <TextBlock x:Name="AppsStatusText"
-                      TextWrapping="Wrap"
-                      Foreground="{DynamicResource MutedText}"
-                      FontSize="13"
-                      Margin="0,6,0,0"/>
         </StackPanel>
-    </Border>
+    </ScrollViewer>
 </Grid>
 
 
@@ -1209,7 +1202,7 @@
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
                                                         Margin="0">
-                                                <TextBlock Text="Γρήγορη εκκίνηση"
+                                                <TextBlock x:Name="PmQuickLaunchTitle" Text="Γρήγορη εκκίνηση"
                                                            FontWeight="SemiBold"
                                                            Margin="0,0,0,8"/>
                                                 <Button x:Name="OpenPasswordManagerBtn"
@@ -1219,7 +1212,7 @@
                                                         Width="240"
                                                         HorizontalAlignment="Left"
                                                         Margin="0,0,0,8"/>
-                                                <TextBlock Text="Ανοίγει σε 1400×800, εμφανίζεται on‑top για 2″ και επαναφέρει την εφαρμογή όταν κλείσει."
+                                                <TextBlock x:Name="PmQuickLaunchDesc" Text="Ανοίγει σε 1400×800, εμφανίζεται on‑top για 2″ και επαναφέρει την εφαρμογή όταν κλείσει."
                                                            Foreground="{DynamicResource MutedText}"
                                                            FontSize="12"
                                                            TextWrapping="Wrap"
@@ -1262,7 +1255,7 @@
                                             Padding="16"
                                             HorizontalAlignment="Stretch">
                                         <StackPanel Orientation="Vertical">
-                                            <TextBlock Text="Γρήγορη εκκίνηση"
+                                            <TextBlock x:Name="ChrisTitusQuickLaunchTitle" Text="Γρήγορη εκκίνηση"
                                                        FontWeight="SemiBold"
                                                        Margin="0,0,0,8"/>
                                             <Grid>
@@ -1281,7 +1274,7 @@
                                                         VerticalAlignment="Center"
                                                         Grid.Column="0"/>
                                                 <!-- Description -->
-                                                <TextBlock Grid.Column="2"
+                                                <TextBlock x:Name="ChrisTitusQuickLaunchDesc" Grid.Column="2"
                                                            Text="Ανοίγει κονσόλα PowerShell στο κέντρο."
                                                            Foreground="{DynamicResource MutedText}"
                                                            VerticalAlignment="Center"
@@ -1314,57 +1307,57 @@
                                     <!-- Module Descriptions -->
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Password Manager" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Ασφαλές εργαλείο που ανοίγει web-based password manager μέσα από WebView2. Ελέγχει αν υπάρχει runtime και καθοδηγεί για εγκατάσταση. Αποθηκεύει δεδομένα σε %AppData%\Kolokithes A.E\WebView2UserData." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoPwMgrTitle" Text="Password Manager" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoPwMgrDesc" Text="Ασφαλές εργαλείο που ανοίγει web-based password manager μέσα από WebView2. Ελέγχει αν υπάρχει runtime και καθοδηγεί για εγκατάσταση. Αποθηκεύει δεδομένα σε %AppData%\Kolokithes A.E\WebView2UserData." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Sims DLC Tools" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Εργαλεία για Sims 4. Κατεβάζει και εγκαθιστά EA-DLC-Unlocker και updater. Εκτελεί scripts και δείχνει μηνύματα επιτυχίας/σφάλματος." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoSimsTitle" Text="Sims DLC Tools" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoSimsDesc" Text="Εργαλεία για Sims 4. Κατεβάζει και εγκαθιστά EA-DLC-Unlocker και updater. Εκτελεί scripts και δείχνει μηνύματα επιτυχίας/σφάλματος." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Windows Utilities" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Δύο βασικά κουμπιά: Auto Login (κατεβάζει auto login.exe) και Activate (τρέχει activate.bat). Τα αρχεία σβήνονται μετά την εκτέλεση." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoWindowsUtilitiesTitle" Text="Windows Utilities" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoWindowsUtilitiesDesc" Text="Δύο βασικά κουμπιά: Auto Login (κατεβάζει auto login.exe) και Activate (τρέχει activate.bat). Τα αρχεία σβήνονται μετά την εκτέλεση." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Public Installers" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Εργαλεία που κατεβάζουν και εκτελούν public installers από URL. Εμφανίζουν προειδοποιήσεις και progress." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoPublicInstallersTitle" Text="Public Installers" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoPublicInstallersDesc" Text="Εργαλεία που κατεβάζουν και εκτελούν public installers από URL. Εμφανίζουν προειδοποιήσεις και progress." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Clear Temporary Files" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Καθαρίζει προσωρινά αρχεία από σύστημα/εφαρμογή. Εμφανίζει αποτελέσματα καθαρισμού και σφάλματα." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoClearTempTitle" Text="Clear Temporary Files" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoClearTempDesc" Text="Καθαρίζει προσωρινά αρχεία από σύστημα/εφαρμογή. Εμφανίζει αποτελέσματα καθαρισμού και σφάλματα." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Crack Sites Manager" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Παράθυρο με ενσωματωμένο browser για πρόσβαση σε sites. Διαχειρίζεται links και προστατεύει από λάθη." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoCrackSitesTitle" Text="Crack Sites Manager" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoCrackSitesDesc" Text="Παράθυρο με ενσωματωμένο browser για πρόσβαση σε sites. Διαχειρίζεται links και προστατεύει από λάθη." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Multitool Panel" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Περιέχει μικρά βοηθητικά εργαλεία (installers, system actions). Δουλεύει ως hub για λειτουργίες." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoMultitoolTitle" Text="Multitool Panel" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoMultitoolDesc" Text="Περιέχει μικρά βοηθητικά εργαλεία (installers, system actions). Δουλεύει ως hub για λειτουργίες." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Custom Message Box" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Προσαρμοσμένο παράθυρο ειδοποιήσεων με icons (Info, Success, Error, Danger, Question). Υποστηρίζει λεπτομέρειες σφάλματος, copy στο clipboard, always-on-top." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="InfoCustomMsgBoxTitle" Text="Custom Message Box" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <TextBlock x:Name="InfoCustomMsgBoxDesc" Text="Προσαρμοσμένο παράθυρο ειδοποιήσεων με icons (Info, Success, Error, Danger, Question). Υποστηρίζει λεπτομέρειες σφάλματος, copy στο clipboard, always-on-top." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
 
