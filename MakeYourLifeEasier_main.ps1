@@ -72,6 +72,84 @@ function Get-KolokithesDataRoot {
     return $root
 }
 
+function Get-AppPaths {
+    <#
+    Returns a dictionary of important asset paths under the application data root.  The
+    application stores its assets in structured subdirectories of
+    `%APPDATA%\Kolokithes A.E` so that users can easily locate and inspect them.
+    The structure is as follows:
+
+        %APPDATA%\Kolokithes A.E\assets\config\i18n.psd1
+                                             \Set-Language_additions.ps1
+                                      \images\activate.png
+                                             \autologin.png
+                                      \ui    \App.xaml
+
+    The helper ensures that each of these directories exists before returning the
+    computed paths.  Call this whenever you need to retrieve or create the
+    asset tree.
+    #>
+    $root       = Get-KolokithesDataRoot
+    $assetsDir  = Join-Path $root 'assets'
+    $imagesDir  = Join-Path $assetsDir 'images'
+    $configDir  = Join-Path $assetsDir 'config'
+    $uiDir      = Join-Path $assetsDir 'ui'
+    foreach ($d in @($assetsDir, $imagesDir, $configDir, $uiDir)) {
+        if (-not (Test-Path $d)) {
+            try { New-Item -ItemType Directory -Force -Path $d | Out-Null } catch {}
+        }
+    }
+    return [ordered]@{
+        Root             = $root
+        ImagesDir        = $imagesDir
+        ConfigDir        = $configDir
+        UiDir            = $uiDir
+        I18nPsd1         = Join-Path $configDir 'i18n.psd1'
+        SetLangAdditions = Join-Path $configDir 'Set-Language_additions.ps1'
+        AppXaml          = Join-Path $uiDir   'App.xaml'
+        ActivatePng      = Join-Path $imagesDir 'activate.png'
+        AutoLoginPng     = Join-Path $imagesDir 'autologin.png'
+    }
+}
+
+function Initialize-AppAssets {
+    <#
+    Ensures that all core application assets exist in the application data
+    directory.  If any of the required files are missing or empty (length
+    zero), they are downloaded from the upstream repository.  The function
+    returns the same dictionary as Get-AppPaths so callers can retrieve the
+    absolute paths immediately after initialization.  Use the -Force switch to
+    force re-download of the assets even if they already exist.
+    #>
+    param([switch]$Force)
+    $p = Get-AppPaths
+    $sources = @(
+        @{ url = 'https://raw.githubusercontent.com/thomasthanos/pc-restore/refs/heads/main/i18n.psd1';                 dest = $p.I18nPsd1 },
+        @{ url = 'https://raw.githubusercontent.com/thomasthanos/pc-restore/refs/heads/main/Set-Language_additions.ps1'; dest = $p.SetLangAdditions },
+        @{ url = 'https://raw.githubusercontent.com/thomasthanos/pc-restore/refs/heads/main/App.xaml';                   dest = $p.AppXaml },
+        @{ url = 'https://raw.githubusercontent.com/thomasthanos/pc-restore/main/images/activate.png';                   dest = $p.ActivatePng },
+        @{ url = 'https://raw.githubusercontent.com/thomasthanos/pc-restore/main/images/autologin.png';                  dest = $p.AutoLoginPng }
+    )
+    foreach ($s in $sources) {
+        $needsDownload = $Force -or -not (Test-Path $s.dest)
+        if (-not $needsDownload -and (Test-Path $s.dest)) {
+            try {
+                $fileInfo = Get-Item $s.dest
+                if ($fileInfo.Length -eq 0) { $needsDownload = $true }
+            } catch {
+                $needsDownload = $true
+            }
+        }
+        if ($needsDownload) {
+            try {
+                Invoke-FileDownload -Uri $s.url -Destination $s.dest | Out-Null
+            } catch {
+                # Ignore download errors; the user might be offline
+            }
+        }
+    }
+    return $p
+}
 function Get-DownloadPath {
     param([Parameter(Mandatory)][string]$FileName)
     $root = Get-KolokithesDataRoot
@@ -108,9 +186,11 @@ function Initialize-ActivationImages {
     if (-not $window) { return }
     $autoLoginBorder = $window.FindName('AutoLoginImageBorder')
     $activateBorder  = $window.FindName('ActivateImageBorder')
-    $autoPath    = Get-DownloadPath 'autologin.png'
-    $activatePath = Get-DownloadPath 'activate.png'
-    # Download missing images from GitHub
+    # Determine image paths using the application asset tree
+    $paths = Get-AppPaths
+    $autoPath    = $paths.AutoLoginPng
+    $activatePath = $paths.ActivatePng
+    # Download missing images from GitHub into the assets directory
     if (-not (Test-Path $autoPath)) {
         try { Invoke-FileDownload -Uri 'https://raw.githubusercontent.com/thomasthanos/pc-restore/main/images/autologin.png' -Destination $autoPath | Out-Null } catch {}
     }
@@ -386,7 +466,10 @@ function Set-Brush([string]$key,[string]$hex){
 }
 
 # -------------------- Load XAML --------------------
-$xamlPath = Join-Path $PSScriptRoot "App.xaml"
+# Before loading the UI, ensure all required assets are present and downloaded.
+$Paths = Initialize-AppAssets  # Creates folders and downloads App.xaml/i18n/images as needed
+# Read the XAML from the assets directory under %APPDATA%\Kolokithes A.E
+$xamlPath = $Paths.AppXaml
 if (!(Test-Path $xamlPath)) { throw "App.xaml not found at $xamlPath" }
 [xml]$xaml = Get-Content -Path $xamlPath -Raw
 $reader = New-Object System.Xml.XmlNodeReader $xaml
@@ -1075,9 +1158,11 @@ if (Test-Path $IconFilePath) {
 # Define an empty dictionary; it will be populated from the external i18n.psd1 file.
 $i18n = @{}
 
-# Attempt to import translations from an external PowerShell data file (i18n.psd1).
-# If the file is missing or fails to load, the $i18n variable will remain empty.
-$translationsPath = Join-Path $PSScriptRoot 'i18n.psd1'
+
+# Attempt to import translations from the external PowerShell data file (i18n.psd1)
+# located in the application assets directory.  If the file is missing or
+# fails to load, the $i18n variable will remain empty.
+$translationsPath = $Paths.I18nPsd1
 if (Test-Path $translationsPath) {
     try {
         $fileTranslations = Import-PowerShellDataFile -Path $translationsPath
@@ -1285,7 +1370,11 @@ function Set-Language([string]$code){
     # ChrisTitus Tools, Sims DLC tools, extended install/maintenance controls, etc.).
     # If a Set-Language_additions.ps1 file exists next to this script, dot-source it.
     try {
-        $addonPath = Join-Path $PSScriptRoot 'Set-Language_additions.ps1'
+        # Load the Set-Language_additions script from the assets folder in the
+        # application data directory.  This allows the script to self-heal
+        # if the file is missing and ensures a single copy is used regardless
+        # of the current working directory.
+        $addonPath = $Paths.SetLangAdditions
         if (Test-Path $addonPath) {
             . $addonPath
         }
@@ -2447,3 +2536,156 @@ $null = $window.Add_Loaded({ Initialize-InstallPage })
 
 # -------------------- Run --------------------
 $window.ShowDialog() | Out-Null
+
+# SIG # Begin signature block
+# MIIb+QYJKoZIhvcNAQcCoIIb6jCCG+YCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
+# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUBNx2c9lZ5arFxUkIac/k2Bdh
+# b86gghZnMIIDKTCCAhGgAwIBAgIQeO5NzzqmO59MdcxqsDmnUjANBgkqhkiG9w0B
+# AQsFADAdMRswGQYDVQQDDBJLb2xva2l0aGVzIFNjcmlwdHMwHhcNMjUwOTAzMDE1
+# NDAwWhcNMjYwOTAzMDIwNDAwWjAdMRswGQYDVQQDDBJLb2xva2l0aGVzIFNjcmlw
+# dHMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDWIp+X0ETPUe8mQ18/
+# Cdqk7NocjslT/kJWnCLL7IXZomxAcvdzzyQ1UsGy9pRWpKtGJsu4Tqiuhr5gwHP2
+# WxPNbD892AMt0VII9BhB69mDWj5dQ1/MgkF2PMUMojk4d7nc7zsc2pa7h+SKZpAj
+# PE2gK24K+dZK/Q2dDPmWjITUxqu28+d5hFlCA5yF2a0ig1hIrixj4Go0wkCMEVZC
+# tm6HcK1DLYdNKGfbZmNCwjZU7yBo/vYM05UVQFUSxM81U4uZuRc5SOJZPfshNQwn
+# k5T7Pj5xj2P/cdgH9wvwGhgUR9UZRkQpGtsdwwrqnuTa6vVSFNsrWk1Xj7PprSwd
+# 07E1AgMBAAGjZTBjMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcD
+# AzAdBgNVHREEFjAUghJLb2xva2l0aGVzIFNjcmlwdHMwHQYDVR0OBBYEFOrJA1OE
+# L8tKCYJGOnh4nS1/O2g5MA0GCSqGSIb3DQEBCwUAA4IBAQBYKYfKgVGxnfDHDZo9
+# EgD+qr190lPnVoqZFPtRvixKOSiLzEnqTZjJVtdZ8QdtPc6quGH5P2Kn6cAlqJUK
+# +tRO6vw0mrsiSLR7Or+AOMrZRkYQ53Q4+npmVNB9DqIzThF++lqn9gCbnbUhFmR4
+# Ov2mcWjOXhmxEkDmErFIcW/JVh8CxMaP03jb+SirIohTKX672+RyTwEMHJpoTXIB
+# WKrwImWklipXZfobE1eaUMONzDgQ08IBu0KpiUR2Wp6WXc99aTd0R0anAslPoAkJ
+# yuAZDBtTp/gkUFPL6LgAApft9qFqxGUC28HkMGw9EkfcJMGEJhltqMGHDGP7vqRz
+# CV3iMIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0BAQwF
+# ADBlMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQL
+# ExB3d3cuZGlnaWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVkIElE
+# IFJvb3QgQ0EwHhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQswCQYD
+# VQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGln
+# aWNlcnQuY29tMSEwHwYDVQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwggIi
+# MA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQC/5pBzaN675F1KPDAiMGkz7MKn
+# JS7JIT3yithZwuEppz1Yq3aaza57G4QNxDAf8xukOBbrVsaXbR2rsnnyyhHS5F/W
+# BTxSD1Ifxp4VpX6+n6lXFllVcq9ok3DCsrp1mWpzMpTREEQQLt+C8weE5nQ7bXHi
+# LQwb7iDVySAdYyktzuxeTsiT+CFhmzTrBcZe7FsavOvJz82sNEBfsXpm7nfISKhm
+# V1efVFiODCu3T6cw2Vbuyntd463JT17lNecxy9qTXtyOj4DatpGYQJB5w3jHtrHE
+# tWoYOAMQjdjUN6QuBX2I9YI+EJFwq1WCQTLX2wRzKm6RAXwhTNS8rhsDdV14Ztk6
+# MUSaM0C/CNdaSaTC5qmgZ92kJ7yhTzm1EVgX9yRcRo9k98FpiHaYdj1ZXUJ2h4mX
+# aXpI8OCiEhtmmnTK3kse5w5jrubU75KSOp493ADkRSWJtppEGSt+wJS00mFt6zPZ
+# xd9LBADMfRyVw4/3IbKyEbe7f/LVjHAsQWCqsWMYRJUadmJ+9oCw++hkpjPRiQfh
+# vbfmQ6QYuKZ3AeEPlAwhHbJUKSWJbOUOUlFHdL4mrLZBdd56rF+NP8m800ERElvl
+# EFDrMcXKchYiCd98THU/Y+whX8QgUWtvsauGi0/C1kVfnSD8oR7FwI+isX4KJpn1
+# 5GkvmB0t9dmpsh3lGwIDAQABo4IBOjCCATYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+# HQ4EFgQU7NfjgtJxXWRM3y5nP+e6mK4cD08wHwYDVR0jBBgwFoAUReuir/SSy4Ix
+# LVGLp6chnfNtyA8wDgYDVR0PAQH/BAQDAgGGMHkGCCsGAQUFBwEBBG0wazAkBggr
+# BgEFBQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMEMGCCsGAQUFBzAChjdo
+# dHRwOi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURSb290
+# Q0EuY3J0MEUGA1UdHwQ+MDwwOqA4oDaGNGh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNv
+# bS9EaWdpQ2VydEFzc3VyZWRJRFJvb3RDQS5jcmwwEQYDVR0gBAowCDAGBgRVHSAA
+# MA0GCSqGSIb3DQEBDAUAA4IBAQBwoL9DXFXnOF+go3QbPbYW1/e/Vwe9mqyhhyzs
+# hV6pGrsi+IcaaVQi7aSId229GhT0E0p6Ly23OO/0/4C5+KH38nLeJLxSA8hO0Cre
+# +i1Wz/n096wwepqLsl7Uz9FDRJtDIeuWcqFItJnLnU+nBgMTdydE1Od/6Fmo8L8v
+# C6bp8jQ87PcDx4eo0kxAGTVGamlUsLihVo7spNU96LHc/RzY9HdaXFSMb++hUD38
+# dglohJ9vytsgjTVgHAIDyyCwrFigDkBjxZgiwbJZ9VVrzyerbHbObyMt9H5xaiNr
+# Iv8SuFQtJ37YOtnwtoeW/VvRXKwYw02fc7cBqZ9Xql4o4rmUMIIGtDCCBJygAwIB
+# AgIQDcesVwX/IZkuQEMiDDpJhjANBgkqhkiG9w0BAQsFADBiMQswCQYDVQQGEwJV
+# UzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQu
+# Y29tMSEwHwYDVQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwHhcNMjUwNTA3
+# MDAwMDAwWhcNMzgwMTE0MjM1OTU5WjBpMQswCQYDVQQGEwJVUzEXMBUGA1UEChMO
+# RGlnaUNlcnQsIEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRydXN0ZWQgRzQgVGlt
+# ZVN0YW1waW5nIFJTQTQwOTYgU0hBMjU2IDIwMjUgQ0ExMIICIjANBgkqhkiG9w0B
+# AQEFAAOCAg8AMIICCgKCAgEAtHgx0wqYQXK+PEbAHKx126NGaHS0URedTa2NDZS1
+# mZaDLFTtQ2oRjzUXMmxCqvkbsDpz4aH+qbxeLho8I6jY3xL1IusLopuW2qftJYJa
+# DNs1+JH7Z+QdSKWM06qchUP+AbdJgMQB3h2DZ0Mal5kYp77jYMVQXSZH++0trj6A
+# o+xh/AS7sQRuQL37QXbDhAktVJMQbzIBHYJBYgzWIjk8eDrYhXDEpKk7RdoX0M98
+# 0EpLtlrNyHw0Xm+nt5pnYJU3Gmq6bNMI1I7Gb5IBZK4ivbVCiZv7PNBYqHEpNVWC
+# 2ZQ8BbfnFRQVESYOszFI2Wv82wnJRfN20VRS3hpLgIR4hjzL0hpoYGk81coWJ+Kd
+# PvMvaB0WkE/2qHxJ0ucS638ZxqU14lDnki7CcoKCz6eum5A19WZQHkqUJfdkDjHk
+# ccpL6uoG8pbF0LJAQQZxst7VvwDDjAmSFTUms+wV/FbWBqi7fTJnjq3hj0XbQcd8
+# hjj/q8d6ylgxCZSKi17yVp2NL+cnT6Toy+rN+nM8M7LnLqCrO2JP3oW//1sfuZDK
+# iDEb1AQ8es9Xr/u6bDTnYCTKIsDq1BtmXUqEG1NqzJKS4kOmxkYp2WyODi7vQTCB
+# ZtVFJfVZ3j7OgWmnhFr4yUozZtqgPrHRVHhGNKlYzyjlroPxul+bgIspzOwbtmsg
+# Y1MCAwEAAaOCAV0wggFZMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFO9v
+# U0rp5AZ8esrikFb2L9RJ7MtOMB8GA1UdIwQYMBaAFOzX44LScV1kTN8uZz/nupiu
+# HA9PMA4GA1UdDwEB/wQEAwIBhjATBgNVHSUEDDAKBggrBgEFBQcDCDB3BggrBgEF
+# BQcBAQRrMGkwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBB
+# BggrBgEFBQcwAoY1aHR0cDovL2NhY2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0
+# VHJ1c3RlZFJvb3RHNC5jcnQwQwYDVR0fBDwwOjA4oDagNIYyaHR0cDovL2NybDMu
+# ZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3RlZFJvb3RHNC5jcmwwIAYDVR0gBBkw
+# FzAIBgZngQwBBAIwCwYJYIZIAYb9bAcBMA0GCSqGSIb3DQEBCwUAA4ICAQAXzvsW
+# gBz+Bz0RdnEwvb4LyLU0pn/N0IfFiBowf0/Dm1wGc/Do7oVMY2mhXZXjDNJQa8j0
+# 0DNqhCT3t+s8G0iP5kvN2n7Jd2E4/iEIUBO41P5F448rSYJ59Ib61eoalhnd6ywF
+# LerycvZTAz40y8S4F3/a+Z1jEMK/DMm/axFSgoR8n6c3nuZB9BfBwAQYK9FHaoq2
+# e26MHvVY9gCDA/JYsq7pGdogP8HRtrYfctSLANEBfHU16r3J05qX3kId+ZOczgj5
+# kjatVB+NdADVZKON/gnZruMvNYY2o1f4MXRJDMdTSlOLh0HCn2cQLwQCqjFbqrXu
+# vTPSegOOzr4EWj7PtspIHBldNE2K9i697cvaiIo2p61Ed2p8xMJb82Yosn0z4y25
+# xUbI7GIN/TpVfHIqQ6Ku/qjTY6hc3hsXMrS+U0yy+GWqAXam4ToWd2UQ1KYT70kZ
+# jE4YtL8Pbzg0c1ugMZyZZd/BdHLiRu7hAWE6bTEm4XYRkA6Tl4KSFLFk43esaUeq
+# GkH/wyW4N7OigizwJWeukcyIPbAvjSabnf7+Pu0VrFgoiovRDiyx3zEdmcif/sYQ
+# sfch28bZeUz2rtY/9TCA6TD8dC3JE3rYkrhLULy7Dc90G6e8BlqmyIjlgp2+VqsS
+# 9/wQD7yFylIz0scmbKvFoW2jNrbM1pD2T7m3XDCCBu0wggTVoAMCAQICEAqA7xhL
+# jfEFgtHEdqeVdGgwDQYJKoZIhvcNAQELBQAwaTELMAkGA1UEBhMCVVMxFzAVBgNV
+# BAoTDkRpZ2lDZXJ0LCBJbmMuMUEwPwYDVQQDEzhEaWdpQ2VydCBUcnVzdGVkIEc0
+# IFRpbWVTdGFtcGluZyBSU0E0MDk2IFNIQTI1NiAyMDI1IENBMTAeFw0yNTA2MDQw
+# MDAwMDBaFw0zNjA5MDMyMzU5NTlaMGMxCzAJBgNVBAYTAlVTMRcwFQYDVQQKEw5E
+# aWdpQ2VydCwgSW5jLjE7MDkGA1UEAxMyRGlnaUNlcnQgU0hBMjU2IFJTQTQwOTYg
+# VGltZXN0YW1wIFJlc3BvbmRlciAyMDI1IDEwggIiMA0GCSqGSIb3DQEBAQUAA4IC
+# DwAwggIKAoICAQDQRqwtEsae0OquYFazK1e6b1H/hnAKAd/KN8wZQjBjMqiZ3xTW
+# cfsLwOvRxUwXcGx8AUjni6bz52fGTfr6PHRNv6T7zsf1Y/E3IU8kgNkeECqVQ+3b
+# zWYesFtkepErvUSbf+EIYLkrLKd6qJnuzK8Vcn0DvbDMemQFoxQ2Dsw4vEjoT1Fp
+# S54dNApZfKY61HAldytxNM89PZXUP/5wWWURK+IfxiOg8W9lKMqzdIo7VA1R0V3Z
+# p3DjjANwqAf4lEkTlCDQ0/fKJLKLkzGBTpx6EYevvOi7XOc4zyh1uSqgr6UnbksI
+# cFJqLbkIXIPbcNmA98Oskkkrvt6lPAw/p4oDSRZreiwB7x9ykrjS6GS3NR39iTTF
+# S+ENTqW8m6THuOmHHjQNC3zbJ6nJ6SXiLSvw4Smz8U07hqF+8CTXaETkVWz0dVVZ
+# w7knh1WZXOLHgDvundrAtuvz0D3T+dYaNcwafsVCGZKUhQPL1naFKBy1p6llN3Qg
+# shRta6Eq4B40h5avMcpi54wm0i2ePZD5pPIssoszQyF4//3DoK2O65Uck5Wggn8O
+# 2klETsJ7u8xEehGifgJYi+6I03UuT1j7FnrqVrOzaQoVJOeeStPeldYRNMmSF3vo
+# IgMFtNGh86w3ISHNm0IaadCKCkUe2LnwJKa8TIlwCUNVwppwn4D3/Pt5pwIDAQAB
+# o4IBlTCCAZEwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQU5Dv88jHt/f3X85FxYxlQ
+# Q89hjOgwHwYDVR0jBBgwFoAU729TSunkBnx6yuKQVvYv1Ensy04wDgYDVR0PAQH/
+# BAQDAgeAMBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMIMIGVBggrBgEFBQcBAQSBiDCB
+# hTAkBggrBgEFBQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMF0GCCsGAQUF
+# BzAChlFodHRwOi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRUcnVzdGVk
+# RzRUaW1lU3RhbXBpbmdSU0E0MDk2U0hBMjU2MjAyNUNBMS5jcnQwXwYDVR0fBFgw
+# VjBUoFKgUIZOaHR0cDovL2NybDMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3Rl
+# ZEc0VGltZVN0YW1waW5nUlNBNDA5NlNIQTI1NjIwMjVDQTEuY3JsMCAGA1UdIAQZ
+# MBcwCAYGZ4EMAQQCMAsGCWCGSAGG/WwHATANBgkqhkiG9w0BAQsFAAOCAgEAZSqt
+# 8RwnBLmuYEHs0QhEnmNAciH45PYiT9s1i6UKtW+FERp8FgXRGQ/YAavXzWjZhY+h
+# IfP2JkQ38U+wtJPBVBajYfrbIYG+Dui4I4PCvHpQuPqFgqp1PzC/ZRX4pvP/ciZm
+# UnthfAEP1HShTrY+2DE5qjzvZs7JIIgt0GCFD9ktx0LxxtRQ7vllKluHWiKk6FxR
+# PyUPxAAYH2Vy1lNM4kzekd8oEARzFAWgeW3az2xejEWLNN4eKGxDJ8WDl/FQUSnt
+# bjZ80FU3i54tpx5F/0Kr15zW/mJAxZMVBrTE2oi0fcI8VMbtoRAmaaslNXdCG1+l
+# qvP4FbrQ6IwSBXkZagHLhFU9HCrG/syTRLLhAezu/3Lr00GrJzPQFnCEH1Y58678
+# IgmfORBPC1JKkYaEt2OdDh4GmO0/5cHelAK2/gTlQJINqDr6JfwyYHXSd+V08X1J
+# UPvB4ILfJdmL+66Gp3CSBXG6IwXMZUXBhtCyIaehr0XkBoDIGMUG1dUtwq1qmcwb
+# dUfcSYCn+OwncVUXf53VJUNOaMWMts0VlRYxe5nK+At+DI96HAlXHAL5SlfYxJ7L
+# a54i71McVWRP66bW+yERNpbJCjyCYG2j+bdpxo/1Cy4uPcU3AWVPGrbn5PhDBf3F
+# roguzzhk++ami+r3Qrx5bIbY3TVzgiFI7Gq3zWcxggT8MIIE+AIBATAxMB0xGzAZ
+# BgNVBAMMEktvbG9raXRoZXMgU2NyaXB0cwIQeO5NzzqmO59MdcxqsDmnUjAJBgUr
+# DgMCGgUAoHgwGAYKKwYBBAGCNwIBDDEKMAigAoAAoQKAADAZBgkqhkiG9w0BCQMx
+# DAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgELMQ4wDAYKKwYBBAGCNwIBFTAjBgkq
+# hkiG9w0BCQQxFgQUcGhPseGY5tZwGckjAc6c01Bk6MowDQYJKoZIhvcNAQEBBQAE
+# ggEAT/2I5Rk3g2iWpfVefu7uvti7EPXBcXvCUUS5DVhG8De6Cp8Taecssldyivx6
+# eFhLkPaUj8358qr8uydpLdfIe6eORLSbhD0o3WUPybM6RMrOyMKNBWq33W6yXC63
+# 4Vuh6kTjrMgUH5HBp6aGBmWVmz1yycfsxcHlGkTLoH1QCigEIr0FvG8mnfKM2Bms
+# vRSeBEj1qsl0/t9/Adbmd8off97ZexKcyrqailZjbca8Hh2Za/RbV1OaAA5g3ryp
+# 7TZy8NqFECu62UlELvF8Bcy2hTlmwvYcmzVhcBUbgudQy0y6pZg+B2Ojfzxiy2oh
+# cJYLbqdWC1uHlCrxrLvdnexiZaGCAyYwggMiBgkqhkiG9w0BCQYxggMTMIIDDwIB
+# ATB9MGkxCzAJBgNVBAYTAlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwgSW5jLjFBMD8G
+# A1UEAxM4RGlnaUNlcnQgVHJ1c3RlZCBHNCBUaW1lU3RhbXBpbmcgUlNBNDA5NiBT
+# SEEyNTYgMjAyNSBDQTECEAqA7xhLjfEFgtHEdqeVdGgwDQYJYIZIAWUDBAIBBQCg
+# aTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTA5
+# MDMwMjA0MDJaMC8GCSqGSIb3DQEJBDEiBCCim4qhhI5qk1oaqN7krbPZ6m+FwUms
+# 4dDA8bj3v4bspDANBgkqhkiG9w0BAQEFAASCAgB+7pZbKnVmDUKfzfxaES9Y6YsE
+# UAlJKguTsntZgC8S5K+bNVl7AyUUkgwAfjx7HWNNkSaSIu4yxtQIPLI/WMSxk5Zv
+# 2f1uW8DIxzJycUvNqrAHKAQUt3HaskUKj0+dDkYc1fwZI/rE+GkpfKP9xmluhU8D
+# da7zQKvDQchCdqKrTClb/VxnXLeAa6IlcsWMbjIlaC9Rldtnckbbi6A3Qdlqo6G0
+# rbldHvhHRpVEXsfQI8Fx3J8jRGI5DJJMW7gZx3D22CPMC9YQZzrlJMoWPlLQyG3y
+# ZRoKpnBrMBueUdi+OrO2RQCj9BrpFrHW2snAaDE00/jLqMqKeGg9KEUjydjv3bKj
+# PgKbiYxN/dJuhP8OU6kB+uzesD/cFwyyJON1RQgNMY8m776D2Vx2vdcPXtriwIu4
+# uViADefdnm1mybe0rjW3MomAP2P59/rxiruprmy2HxaGWo6iL/Vxa83zutOWSx8e
+# pklHw9W9wBkNn1mgy+zQJzGojHgGoXzVMvOZvTFoEHmwj4ZEC/m6gEQWZVa6t77D
+# f09TKwe/7nsUtkgZPr1BA7skpNj7ApUy2xmgeoGhWPXDNzUmRx7FmL7fb/pi0x+P
+# dxPIjk7cWD6rrpXIMlSKle0R/ryFrYyTb7qPQnAOVtZH7zL4W6fdJ5lBOC8t9nGf
+# CNujPXDfE7oHILsLTQ==
+# SIG # End signature block
