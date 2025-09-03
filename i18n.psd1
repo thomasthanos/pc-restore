@@ -180,7 +180,8 @@
     connectingStatus="Σύνδεση: {0}..."
     downloadStartStatus="Έναρξη λήψης: {0}"
     installStatus="Εγκατάσταση: {0}"
-    downloadSuccessDetailed="{0} λήφθηκε με επιτυχία! ({1} MB)`nΤοποθεσία: {2}"
+    # Replaced the PowerShell newline escape ``n`` with a literal space to avoid parse errors
+    downloadSuccessDetailed="{0} λήφθηκε με επιτυχία! ({1} MB) Τοποθεσία: {2}"
     appsProgressTitle="Πρόοδος Λήψεων"
     cleanTempTitle="Καθαρισμός Temp"
     cleanTempDesc="Διαγράφει τα προσωρινά αρχεία (%temp%, C:\\Windows\\Temp, Prefetch)."
@@ -369,7 +370,8 @@
     connectingStatus="Connecting: {0}..."
     downloadStartStatus="Starting download: {0}"
     installStatus="Installing: {0}"
-    downloadSuccessDetailed="{0} downloaded successfully! ({1} MB)`nLocation: {2}"
+    # Replaced the PowerShell newline escape ``n`` with a literal space to avoid parse errors
+    downloadSuccessDetailed="{0} downloaded successfully! ({1} MB) Location: {2}"
     appsProgressTitle="Download Progress"
     cleanTempTitle="Clean Temp"
     cleanTempDesc="Deletes temporary files (%temp%, C:\\Windows\\Temp, Prefetch)."
