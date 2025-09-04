@@ -125,3 +125,15 @@ $infoCustomMsgBoxTitle = $window.FindName('InfoCustomMsgBoxTitle')
 if ($infoCustomMsgBoxTitle) { $infoCustomMsgBoxTitle.Text = $t.infoCustomMsgBoxTitle }
 $infoCustomMsgBoxDesc  = $window.FindName('InfoCustomMsgBoxDesc')
 if ($infoCustomMsgBoxDesc)  { $infoCustomMsgBoxDesc.Text  = $t.infoCustomMsgBoxDesc }
+
+# Sims DLC page translations
+$siBtn    = $window.FindName('SimsInstallBtn')
+if ($siBtn) { $siBtn.Content = $t.simsInstallBtn }
+$suBtn    = $window.FindName('SimsUnlockerBtn')
+if ($suBtn) { $suBtn.Content = $t.simsUnlockerBtn }
+$snTitle  = $window.FindName('SimsNoteTitle')
+if ($snTitle) { $snTitle.Text = $t.simsNoteTitle }
+$snDesc   = $window.FindName('SimsNoteDesc')
+if ($snDesc) { $snDesc.Text = $t.simsNoteDesc }
+$stLabel  = $window.FindName('SimsTutorialLabel')
+if ($stLabel) { $stLabel.Text = $t.simsTutorialLabel }

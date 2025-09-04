@@ -1114,6 +1114,7 @@ $script:BaseFontSizes   = @{}
 $script:BaseHeights     = @{}
 $script:BasePaddings    = @{}
 $script:BaseFontWeights = @{}
+$script:BaseVisibility  = @{}  # store initial Visibility per control
 
 # Track the current scale and whether bold styling should be used.  These
 # values are updated whenever the resolution changes and are used to
@@ -1148,7 +1149,6 @@ function Save-BaseMetrics {
         ($window.FindName('InstallTitle')), ($window.FindName('InstallDesc')),
         ($window.FindName('ActivateTitle')), ($window.FindName('ActivateDesc')),
         ($window.FindName('MaintenanceTitle')), ($window.FindName('MaintenanceDesc')),
-        ($window.FindName('InfoTitle')), ($window.FindName('InfoDesc')),
         ($window.FindName('VersionLabel')), ($window.FindName('CopyrightLabel')),
         ($window.FindName('StatusText')), $MaintenanceStatusText, $ActivateStatusText
         # Note: sidebar buttons (profileBtn, installBtn, etc.) are intentionally omitted
@@ -1170,6 +1170,11 @@ function Save-BaseMetrics {
             $pad = $ctrl.Padding
             # Only capture if padding is defined; some controls default to Thickness(0,0,0,0)
             if ($null -ne $pad) { $script:BasePaddings[$name] = $pad }
+        }
+
+        # Capture initial Visibility if the control exposes the property and hasn't been recorded yet.
+        if (-not $script:BaseVisibility.ContainsKey($name) -and $ctrl.PSObject.Properties.Match('Visibility')) {
+            $script:BaseVisibility[$name] = $ctrl.Visibility
         }
     }
     $script:BaseMetricsCollected = $true
@@ -1368,6 +1373,28 @@ function Set-WindowResolution([string]$sel){
         # Reset any previous transform to identity
         # Apply or remove bold weight on text elements as needed
         Set-BoldWeight -scale 1 -bold:$useBold
+
+        # Toggle visibility of page titles and descriptions on very small resolutions.
+        # On 480p (≤854px width) hide headers; on larger widths, restore to each control's
+        # initial Visibility captured from XAML (so Maintenance stays Collapsed as authored).
+        $headerNames = @(
+            'InstallTitle','InstallDesc',
+            'ActivateTitle','ActivateDesc'
+        )
+        foreach ($hn in $headerNames) {
+            $ctrl = $window.FindName($hn)
+            if ($null -ne $ctrl) {
+                if ($w -le 854) {
+                    $ctrl.Visibility = [System.Windows.Visibility]::Collapsed
+                } else {
+                    if ($script:BaseVisibility.ContainsKey($hn)) {
+                        $ctrl.Visibility = $script:BaseVisibility[$hn]
+                    } else {
+                        $ctrl.Visibility = [System.Windows.Visibility]::Visible
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1444,9 +1471,7 @@ function Set-Language([string]$code){
     ($window.FindName('ActivateDesc')).Text     = $t.activateDesc
     ($window.FindName('MaintenanceTitle')).Text = $t.maintenanceTitle
     ($window.FindName('MaintenanceDesc')).Text  = $t.maintenanceDesc
-
-    ($window.FindName('InfoTitle')).Text        = $t.infoTitle
-    ($window.FindName('InfoDesc')).Text         = $t.infoDesc
+    
     ($window.FindName('VersionLabel')).Text     = $t.version
     ($window.FindName('CopyrightLabel')).Text   = $t.copyright
 

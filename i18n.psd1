@@ -192,6 +192,12 @@
     patchMyPcTitle="Patch My PC"
     patchMyPcDesc="Κατεβάζει την εφαρμογή Patch My PC για ενημερώσεις."
     patchMyPcBtn="Λήψη Patch My PC"
+    # Sims DLC page controls and messages
+    simsInstallBtn="Εγκατάσταση / Update"
+    simsUnlockerBtn="Λήψη EA DLC Unlocker"
+    simsNoteTitle="Σημείωση"
+    simsNoteDesc="Κλείσε το παιχνίδι πριν την εγκατάσταση ή ενημέρωση. Ενδέχεται να ζητηθούν δικαιώματα διαχειριστή."
+    simsTutorialLabel="Δες το tutorial στο YouTube"
   }
   "en" = @{
     title="Make Your Life Easier"
@@ -382,5 +388,11 @@
     patchMyPcTitle="Patch My PC"
     patchMyPcDesc="Downloads the Patch My PC application for updates."
     patchMyPcBtn="Download Patch My PC"
+    # Sims DLC page controls and messages
+    simsInstallBtn="Install / Update"
+    simsUnlockerBtn="Download EA DLC Unlocker"
+    simsNoteTitle="Note"
+    simsNoteDesc="Close the game before installation or update. Administrator rights may be requested."
+    simsTutorialLabel="Watch the tutorial on YouTube"
   }
 }

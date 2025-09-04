@@ -1373,9 +1373,6 @@
                         <Grid x:Name="InfoContent" Visibility="Collapsed">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
                                 <StackPanel Margin="24">
-                                    <TextBlock x:Name="InfoTitle" Text="Πληροφορίες" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
-                                    <TextBlock x:Name="InfoDesc" Text="Η εφαρμογή συγκεντρώνει καθημερινές εργασίες σε ένα σημείο — για να σου κάνει τη ζωή πιο εύκολη." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Width="560" Margin="0,0,0,16"/>
-
                                     <!-- Module Descriptions -->
                                     <Border Style="{StaticResource InfoCard}">
                                         <StackPanel>
