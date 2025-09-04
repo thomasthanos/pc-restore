@@ -2,8 +2,10 @@
   "el" = @{
     title="Κάνε τη Ζωή σου Πιο Εύκολη"
     menu="Μενού"
-    profile="Προφίλ"; install="Εγκατάσταση Εφαρμογών"; activate="Ενεργοποίηση/Αυτόματη Σύνδεση"
-    maintenance="Συντήρηση Συστήματος"; sites="Ιστότοποι"; apps="Εφαρμογές"; info="Πληροφορίες"
+    # Rename sidebar buttons for clarity. The "profile" label reflects that this page contains all settings.
+    # The other labels (sites, apps, spotify, sims) are the same in both languages.
+    profile="Ρυθμίσεις"; install="Εγκατάσταση Εφαρμογών"; activate="Ενεργοποίηση/Αυτόματη Σύνδεση"
+    maintenance="Συντήρηση Συστήματος"; sites="Crack Sites / Crack Games"; apps="Crack Apps Installer"; info="Πληροφορίες"
 
     profileTitle="Ρυθμίσεις Προφίλ"
     displayTitle="Ρυθμίσεις Οθόνης"
@@ -46,10 +48,10 @@
 
     # --- New keys for missing translations (UI elements, statuses, messages) ---
     # Sidebar entries for new pages
-    spotify="Spotify"
+    spotify="Spicetify Spotify"
     passwordManager="Διαχειριστής Κωδικών"
     chrisTitus="ChrisTitus"
-    sims="Sims"
+    sims="DLC Unlocker"
 
     # Page titles and descriptions
     spotifyTitle="Spotify"
@@ -202,8 +204,9 @@
   "en" = @{
     title="Make Your Life Easier"
     menu="Menu"
-    profile="Profile"; install="Install Apps"; activate="Activate/Autologin"
-    maintenance="System Maintenance"; sites="Sites"; apps="Apps"; info="Info"
+    # Rename sidebar buttons for clarity. "Profile" becomes "Settings" since this page contains all settings.
+    profile="Settings"; install="Install Apps"; activate="Activate/Autologin"
+    maintenance="System Maintenance"; sites="Crack Sites / Crack Games"; apps="Crack Apps Installer"; info="Info"
     profileTitle="Profile Settings"
     displayTitle="Display Settings"
     resolution="Window resolution:"
@@ -242,10 +245,10 @@
 
     # --- New keys for missing translations (UI elements, statuses, messages) ---
     # Sidebar entries for new pages
-    spotify="Spotify"
+    spotify="Spicetify Spotify"
     passwordManager="Password Manager"
     chrisTitus="ChrisTitus"
-    sims="Sims"
+    sims="DLC Unlocker"
 
     # Page titles and descriptions
     spotifyTitle="Spotify"
