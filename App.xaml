@@ -1286,16 +1286,88 @@
                             </ScrollViewer>
                         </Grid>
 
-                        <!-- Sims Page -->
-                        <Grid x:Name="SimsContent" Visibility="Collapsed">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
-                                <StackPanel Margin="24">
-                                    <TextBlock x:Name="SimsTitle" Text="Sims DLC Tools" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
-                                    <TextBlock x:Name="SimsDesc" Text="Βοηθητικά εργαλεία για το Sims 4. Κατεβάζει και εγκαθιστά EA-DLC-Unlocker και updater." Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-                                    <Button x:Name="RunSimsDlcBtn" Content="Εκτέλεση Sims Εργαλείων" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
+<!-- Sims Page -->
+<Grid x:Name="SimsContent" Visibility="Collapsed">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
+    <Grid Margin="24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- Icon + Titles -->
+      <Viewbox Grid.Row="0" Grid.Column="0" Width="64" Height="64" Margin="0,0,16,0">
+        <Canvas Width="100" Height="100">
+          <Path Fill="#34D399" Data="M50,0 L76,40 L50,100 L24,40 Z"/>
+          <Path Fill="#10B981" Opacity="0.9" Data="M50,0 L76,40 L50,60 Z"/>
+          <Ellipse Fill="#000000" Opacity="0.08" Width="46" Height="10" Canvas.Left="27" Canvas.Top="96"/>
+        </Canvas>
+      </Viewbox>
+
+      <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
+        <TextBlock x:Name="SimsTitle" Text="Sims DLC Tools" FontSize="24" FontWeight="SemiBold"/>
+        <TextBlock x:Name="SimsDesc"
+                   Text="Βοηθητικά εργαλεία για το The Sims 4: κατεβάζει &amp; εγκαθιστά EA DLC Unlocker και Updater."
+                   Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+      </StackPanel>
+
+      <!-- Buttons -->
+      <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,20,0,0">
+        <Button x:Name="SimsInstallBtn"
+                Content="Εγκατάσταση / Update"
+                Style="{StaticResource PrimaryButton}"
+                Height="48" FontSize="16" Padding="20,10"
+                ToolTip="Κατεβάζει/τρέχει το πακέτο εγκατάστασης Sims"/>
+        <Button x:Name="SimsUnlockerBtn"
+                Content="Λήψη EA DLC Unlocker"
+                Style="{StaticResource OutlineButton}"
+                Height="48" FontSize="16" Padding="20,10"
+                Margin="12,0,0,0"
+                ToolTip="Κατεβάζει το EA-DLC-Unlocker"/>
+      </StackPanel>
+
+      <!-- Note -->
+      <Border Grid.Row="2" Grid.ColumnSpan="2" Margin="0,16,0,0" CornerRadius="12" Padding="12"
+              Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource BorderBr}" BorderThickness="1">
+        <StackPanel>
+          <TextBlock Text="Σημείωση" FontWeight="SemiBold"/>
+          <TextBlock Text="Κλείσε το παιχνίδι πριν την εγκατάσταση ή ενημέρωση. Ενδέχεται να ζητηθούν δικαιώματα διαχειριστή."
+                     Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Clickable tutorial image -->
+      <Button x:Name="SimsTutorialBtn"
+              Grid.Row="3" Grid.ColumnSpan="2"
+              Margin="0,12,0,0"
+              Background="Transparent"
+              BorderBrush="{DynamicResource BorderBr}"
+              BorderThickness="1"
+              Cursor="Hand">
+        <Grid>
+          <Image x:Name="SimsTutorialImage"
+                 Source="https://i.postimg.cc/76y240fg/UOf-QJv4tk-EI-HD.jpg"
+                 Stretch="UniformToFill"
+                 Height="260"
+                 RenderOptions.BitmapScalingMode="HighQuality"/>
+          <Border VerticalAlignment="Bottom" Height="48" Background="#80000000">
+            <TextBlock Text="Δες το tutorial στο YouTube"
+                       Foreground="White" FontSize="18" FontWeight="SemiBold"
+                       VerticalAlignment="Center" Margin="12,0"/>
+          </Border>
+        </Grid>
+      </Button>
+
+    </Grid>
+  </ScrollViewer>
+</Grid>
+
 
                         <!-- Info Panel -->
                         <Grid x:Name="InfoContent" Visibility="Collapsed">
