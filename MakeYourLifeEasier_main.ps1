@@ -516,6 +516,7 @@ $spotifyBtn         = $window.FindName('SpotifyBtn')
 $passwordManagerBtn = $window.FindName('PasswordManagerBtn')
 $chrisTitusBtn      = $window.FindName('ChrisTitusBtn')
 $simsBtn            = $window.FindName('SimsBtn')
+$BiosBtn            = $window.FindName('BiosBtn')
 # Apps page controls
 $script:AppsDownloadsPanel  = $window.FindName('AppsButtonsPanel')
 $script:AppsOverallProgress = $window.FindName('AppsOverallProgressBar')
@@ -1345,7 +1346,291 @@ function Set-BaseFontResources([int]$w){
         Write-Verbose "Could not update BaseFont resources: $($_.Exception.Message)"
     }
 }
+# Προσθήκη BIOS button event handler
+# Προσθήκη BIOS button event handler (ΒΕΒΑΙΩΣΕ ότι έχεις κάνει FindName πιο πάνω:)
+$BiosBtn = $window.FindName('BiosBtn')
+if ($BiosBtn) {
+    $null = $BiosBtn.Add_Click({
+        Show-BiosDialog -DialogType "Permission"
+    })
+}
 
+# Κοινή συνάρτηση για όλα τα BIOS dialogs
+function Show-BiosDialog {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("Permission", "Restart")]
+        [string]$DialogType,
+
+        [scriptblock]$OnConfirm
+    )
+
+    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+    $t = $i18n[$code]
+
+    # Modal
+    $window.IsEnabled = $false
+    $dialog = New-Object System.Windows.Window
+    $dialog.Title = $t.biosTitle
+    $dialog.WindowStyle = "None"
+    $dialog.AllowsTransparency = $true
+    $dialog.Background = "Transparent"
+    $dialog.SizeToContent = "WidthAndHeight"
+    $dialog.WindowStartupLocation = "CenterOwner"
+    $dialog.Owner = $window
+    $dialog.ShowInTaskbar = $false
+    $dialog.Topmost = $true
+
+    # Κύριο container με 3D εφέ και κυκλικές γωνίες
+    $mainBorder = New-Object System.Windows.Controls.Border
+    $mainBorder.Width = 450
+    $mainBorder.Height = 250
+    $mainBorder.CornerRadius = New-Object System.Windows.CornerRadius(15)
+    $mainBorder.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Colors]::Black,
+        [System.Windows.Media.Color]::FromRgb(30, 30, 30),
+        45
+    )
+    $mainBorder.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        [System.Windows.Media.Color]::FromRgb(40, 40, 40),
+        135
+    )
+    $mainBorder.BorderThickness = New-Object System.Windows.Thickness(1)
+    
+    # 3D Shadow Effect
+    $shadowEffect = New-Object System.Windows.Media.Effects.DropShadowEffect
+    $shadowEffect.Color = [System.Windows.Media.Colors]::Black
+    $shadowEffect.ShadowDepth = 0
+    $shadowEffect.BlurRadius = 20
+    $shadowEffect.Opacity = 0.8
+    $mainBorder.Effect = $shadowEffect
+
+    # Εσωτερικό container
+    $innerBorder = New-Object System.Windows.Controls.Border
+    $innerBorder.CornerRadius = New-Object System.Windows.CornerRadius(12)
+    $innerBorder.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(25, 25, 25),
+        [System.Windows.Media.Color]::FromRgb(15, 15, 15),
+        45
+    )
+    $innerBorder.Margin = New-Object System.Windows.Thickness(10)
+    $innerBorder.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(60, 60, 60),
+        [System.Windows.Media.Color]::FromRgb(30, 30, 30),
+        225
+    )
+    $innerBorder.BorderThickness = New-Object System.Windows.Thickness(1)
+
+    $stackPanel = New-Object System.Windows.Controls.StackPanel
+    $stackPanel.Margin = New-Object System.Windows.Thickness(25)
+
+    # Τίτλος με gradient
+    $titleText = New-Object System.Windows.Controls.TextBlock
+    $titleText.FontSize = 20
+    $titleText.FontWeight = "Bold"
+    $titleText.Margin = New-Object System.Windows.Thickness(0,0,0,15)
+    $titleText.Foreground = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(220, 220, 220),
+        [System.Windows.Media.Color]::FromRgb(180, 180, 180),
+        0
+    )
+    $titleText.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{
+        Color = [System.Windows.Media.Colors]::Black
+        ShadowDepth = 1
+        BlurRadius = 2
+        Opacity = 0.6
+    }
+
+    # Μήνυμα
+    $messageText = New-Object System.Windows.Controls.TextBlock
+    $messageText.Foreground = New-Object System.Windows.Media.SolidColorBrush(
+        [System.Windows.Media.Color]::FromRgb(180, 180, 180)
+    )
+    $messageText.TextWrapping = "Wrap"
+    $messageText.Margin = New-Object System.Windows.Thickness(0,0,0,25)
+    $messageText.FontSize = 14
+
+    switch ($DialogType) {
+        "Permission" { 
+            $titleText.Text = $t.biosPermissionTitle
+            $messageText.Text = $t.biosPermissionMessage
+        }
+        "Restart" { 
+            $titleText.Text = $t.biosRestartTitle
+            $messageText.Text = $t.biosRestartMessage
+        }
+    }
+
+    # Κουμπιά με 3D εφέ
+    $buttonPanel = New-Object System.Windows.Controls.StackPanel
+    $buttonPanel.Orientation = "Horizontal"
+    $buttonPanel.HorizontalAlignment = "Right"
+    $buttonPanel.Margin = New-Object System.Windows.Thickness(0,10,0,0)
+
+    # Cancel button με 3D εφέ και κυκλικές γωνίες
+    $cancelButton = New-Object System.Windows.Controls.Button
+    $cancelButton.Width = 100
+    $cancelButton.Height = 35
+    $cancelButton.Margin = New-Object System.Windows.Thickness(0,0,10,0)
+    $cancelButton.Content = $t.biosCancel
+    $cancelButton.IsCancel = $true
+    $cancelButton.FontWeight = "SemiBold"
+    
+    # Δημιουργία Template για κουμπί με κυκλικές γωνίες (με σωστό namespace)
+$buttonTemplate = @'
+<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 TargetType="Button">
+    <Border x:Name="border"
+            CornerRadius="8"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}">
+        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+        </Trigger>
+        <Trigger Property="IsPressed" Value="True">
+            <Setter TargetName="border" Property="Opacity" Value="0.6"/>
+        </Trigger>
+    </ControlTemplate.Triggers>
+</ControlTemplate>
+'@
+
+
+    # Εφαρμογή του template στα κουμπιά
+$cancelButton.Template  = [System.Windows.Markup.XamlReader]::Parse($buttonTemplate)
+    $cancelButton.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        [System.Windows.Media.Color]::FromRgb(60, 60, 60),
+        90
+    )
+    $cancelButton.Foreground = [System.Windows.Media.Brushes]::White
+    $cancelButton.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(120, 120, 120),
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        270
+    )
+    $cancelButton.BorderThickness = New-Object System.Windows.Thickness(1)
+    $cancelButton.Add_Click({
+        $window.IsEnabled = $true
+        $dialog.Close()
+    })
+
+    # Confirm button με έντονο 3D εφέ
+    $confirmButton = New-Object System.Windows.Controls.Button
+    $confirmButton.Width = 100
+    $confirmButton.Height = 35
+    $confirmButton.IsDefault = $true
+    $confirmButton.FontWeight = "Bold"
+    
+    # Εφαρμογή του ίδιου template
+$confirmButton.Template = [System.Windows.Markup.XamlReader]::Parse($buttonTemplate)
+    $confirmButton.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(0, 120, 215),
+        [System.Windows.Media.Color]::FromRgb(0, 80, 180),
+        90
+    )
+    $confirmButton.Foreground = [System.Windows.Media.Brushes]::White
+    $confirmButton.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(0, 160, 255),
+        [System.Windows.Media.Color]::FromRgb(0, 100, 200),
+        270
+    )
+    $confirmButton.BorderThickness = New-Object System.Windows.Thickness(1)
+    
+    # 3D shadow για τα κουμπιά
+    $buttonShadow = New-Object System.Windows.Media.Effects.DropShadowEffect
+    $buttonShadow.Color = [System.Windows.Media.Colors]::Black
+    $buttonShadow.ShadowDepth = 2
+    $buttonShadow.BlurRadius = 4
+    $buttonShadow.Opacity = 0.5
+    $confirmButton.Effect = $buttonShadow
+    $cancelButton.Effect = $buttonShadow
+
+    if ($DialogType -eq "Permission") {
+        $confirmButton.Content = $t.biosContinue
+        $confirmButton.Add_Click({
+            $window.IsEnabled = $true
+            $dialog.Close()
+            Show-BiosDialog -DialogType "Restart"
+        })
+    } else {
+        $confirmButton.Content = $t.biosRestart
+        $confirmButton.Add_Click({
+            $window.IsEnabled = $true
+            $dialog.Close()
+            Restart-ToBios
+        })
+    }
+
+    # Build hierarchy
+    [void]$buttonPanel.Children.Add($cancelButton)
+    [void]$buttonPanel.Children.Add($confirmButton)
+    [void]$stackPanel.Children.Add($titleText)
+    [void]$stackPanel.Children.Add($messageText)
+    [void]$stackPanel.Children.Add($buttonPanel)
+    
+    $innerBorder.Child = $stackPanel
+    $mainBorder.Child = $innerBorder
+    $dialog.Content = $mainBorder
+
+    $dialog.Add_Closed({ $window.IsEnabled = $true })
+    [void]$dialog.ShowDialog()
+}
+
+
+# Βελτιωμένη συνάρτηση για restart to BIOS
+function Restart-ToBios {
+    try {
+        # Έλεγχος για UEFI firmware
+        $isUEFI = $false
+        try {
+            $firmwareType = (Get-WmiObject -Class Win32_ComputerSystem).BootupState
+            $isUEFI = ($firmwareType -like "*UEFI*") -or (Confirm-SecureBootUEFI -ErrorAction SilentlyContinue)
+        } catch {
+            # Fallback: Προσπάθεια με shutdown /fw
+            $isUEFI = $true
+        }
+
+        if ($isUEFI) {
+            # UEFI system - προσπάθεια restart to BIOS
+            $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+            Show-Toast ($i18n[$code].biosRestarting) 2000 $false
+            
+            # Απενεργοποίηση κουμπιού BIOS κατά την εκτέλεση
+            if ($BiosBtn) { $BiosBtn.IsEnabled = $false }
+            
+            Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /fw /t 2" -Verb RunAs -WindowStyle Hidden -ErrorAction Stop
+            
+            # Αναμονή για λίγο πριν το κλείσιμο της εφαρμογής
+            Start-Sleep -Seconds 1
+        } else {
+            # Legacy BIOS - ενημέρωση χρήστη
+            $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+            [System.Windows.MessageBox]::Show(
+                $i18n[$code].biosLegacyMessage,
+                $i18n[$code].biosLegacyTitle,
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Information
+            ) | Out-Null
+        }
+    } catch {
+        $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+        [System.Windows.MessageBox]::Show(
+            "$($i18n[$code].biosError): $($_.Exception.Message)",
+            $i18n[$code].biosErrorTitle,
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
+    } finally {
+        # Επαναφορά κατάστασης κουμπιού
+        if ($BiosBtn) { $BiosBtn.IsEnabled = $true }
+    }
+}
 function Set-WindowResolution([string]$sel){
     if($sel -match '(\d{3,4})x(\d{3,4})'){
         $w = [int]$matches[1]; $h = [int]$matches[2]
@@ -1439,7 +1724,7 @@ function Set-ThemeDark {
 function Set-Language([string]$code){
     if(-not $i18n.ContainsKey($code)){ $code = "en" }
     $t = $i18n[$code]
-
+if ($BiosBtn) { $BiosBtn.Content = $t.bios }
     $TitleText.Text = $t.title
     $MenuLabel.Text = $t.menu
     $profileBtn.Content = $t.profile

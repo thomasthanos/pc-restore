@@ -634,6 +634,29 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Προσθήκη styles στο Window.Resources -->
+<Style x:Key="BiosDialogContainer" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource CardBg}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="Padding" Value="24"/>
+    <Setter Property="Effect">
+        <Setter.Value>
+            <DropShadowEffect BlurRadius="25" ShadowDepth="0" Opacity="0.3" Color="#000000"/>
+        </Setter.Value>
+    </Setter>
+</Style>
+
+<Style x:Key="BiosDialogButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+    <Setter Property="Margin" Value="12,0,0,0"/>
+    <Setter Property="MinWidth" Value="80"/>
+</Style>
+
+<Style x:Key="BiosDialogCancelButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+    <Setter Property="Margin" Value="0,0,12,0"/>
+    <Setter Property="MinWidth" Value="80"/>
+</Style>
     </Window.Resources>
 
     <!-- Wrap the entire application content in a ViewBox to scale uniformly with the window size.
@@ -724,8 +747,12 @@
                         <StackPanel Grid.Row="9"  Margin="12,0,12,8"><Button x:Name="PasswordManagerBtn" Content="Password Manager"  Style="{StaticResource PillButton}"/></StackPanel>
                         <StackPanel Grid.Row="10" Margin="12,0,12,8"><Button x:Name="ChrisTitusBtn"      Content="ChrisTitus"        Style="{StaticResource PillButton}"/></StackPanel>
                         <StackPanel Grid.Row="11" Margin="12,0,12,8"><Button x:Name="SimsBtn"           Content="Sims"              Style="{StaticResource PillButton}"/></StackPanel>
-                        <!-- Info button moved to a lower row (12) -->
-                        <StackPanel Grid.Row="12" Margin="12,0,12,8"><Button x:Name="InfoBtn"        Content="Info"                 Style="{StaticResource PillButton}"/></StackPanel>
+                        <!-- Info and BIOS buttons occupy the same row.  Nest both buttons in a single
+                             StackPanel so they render one after the other instead of overlapping. -->
+                        <StackPanel Grid.Row="12" Margin="12,0,12,8">
+                            <Button x:Name="InfoBtn" Content="Info" Style="{StaticResource PillButton}" Margin="0,0,0,8"/>
+                            <Button x:Name="BiosBtn" Content="BIOS" Style="{StaticResource PillButton}"/>
+                        </StackPanel>
                     </Grid>
                 </ScrollViewer>
 
