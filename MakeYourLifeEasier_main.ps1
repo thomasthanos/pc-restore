@@ -2501,100 +2501,290 @@ if ($DeleteTempBtn) {
         }
     })
 }
-# === System Scan (SFC + DISM) – interactive CMD, no redirects ===
-# === System Scan (SFC + DISM) – CMD auto-close, app stays open, reliable UI update via Dispatcher ===
-if ($null -ne $SystemScanBtn) {
-    $null = $SystemScanBtn.Add_Click({
-        try {
-            # --- Admin check ---
-            $id        = [Security.Principal.WindowsIdentity]::GetCurrent()
-            $principal = New-Object Security.Principal.WindowsPrincipal($id)
-            $isAdmin   = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-            if (-not $isAdmin) {
-                [System.Windows.MessageBox]::Show(
-                    "Παρακαλώ εκτελέστε την εφαρμογή ως Διαχειριστής.",
-                    "Προσοχή",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Warning
-                ) | Out-Null
-                return
-            }
+# Προσθήκη μετά τη συνάρτηση Show-BiosDialog
 
-            # --- UI: start state ---
-            $uiDisp = [System.Windows.Application]::Current.Dispatcher
-            if ($null -ne $uiDisp) {
-                $uiDisp.Invoke([System.Action]{
-                    if ($null -ne $MaintenanceProgressBar) {
-                        $MaintenanceProgressBar.IsIndeterminate = $true
-                        $MaintenanceProgressBar.Visibility = 'Visible'
-                    }
-                    if ($null -ne $MaintenanceStatusText) {
-                        $MaintenanceStatusText.Text = "Εκτελείται SFC και DISM..."
-                    }
-                })
-            }
+function Show-SystemScanDialog {
+    $code = ([System.Windows.Controls.ComboBoxItem]$languageCombo.SelectedItem).Tag
+    $t = $i18n[$code]
 
-            # --- Sentinel file ---
-            $tempDir  = "C:\Temp"
-            if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force | Out-Null }
-            $sentinel = Join-Path $tempDir "systemscan.done"
-            if (Test-Path $sentinel) { Remove-Item $sentinel -Force -ErrorAction SilentlyContinue }
+    # Modal
+    $window.IsEnabled = $false
+    $dialog = New-Object System.Windows.Window
+    $dialog.Title = $t.systemScanTitle
+    $dialog.WindowStyle = "None"
+    $dialog.AllowsTransparency = $true
+    $dialog.Background = "Transparent"
+    $dialog.SizeToContent = "WidthAndHeight"
+    $dialog.WindowStartupLocation = "CenterOwner"
+    $dialog.Owner = $window
+    $dialog.ShowInTaskbar = $false
+    $dialog.Topmost = $true
 
-            # --- Run CMD (visible), auto-close when done, then write sentinel ---
-            $cmdLine = 'sfc /scannow & dism /online /cleanup-image /restorehealth & echo done> "C:\Temp\systemscan.done"'
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmdLine -Verb RunAs -WindowStyle Normal | Out-Null
+    # Κύριο container με 3D εφέ και κυκλικές γωνίες
+    $mainBorder = New-Object System.Windows.Controls.Border
+    $mainBorder.Width = 450
+    $mainBorder.Height = 280
+    $mainBorder.CornerRadius = New-Object System.Windows.CornerRadius(15)
+    $mainBorder.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Colors]::Black,
+        [System.Windows.Media.Color]::FromRgb(30, 30, 30),
+        45
+    )
+    $mainBorder.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        [System.Windows.Media.Color]::FromRgb(40, 40, 40),
+        135
+    )
+    $mainBorder.BorderThickness = New-Object System.Windows.Thickness(1)
+    
+    # 3D Shadow Effect
+    $shadowEffect = New-Object System.Windows.Media.Effects.DropShadowEffect
+    $shadowEffect.Color = [System.Windows.Media.Colors]::Black
+    $shadowEffect.ShadowDepth = 0
+    $shadowEffect.BlurRadius = 20
+    $shadowEffect.Opacity = 0.8
+    $mainBorder.Effect = $shadowEffect
 
-            # --- Reliable UI update: Timer polls sentinel, Dispatcher updates UI on the UI thread ---
-            $timer = New-Object System.Timers.Timer
-            $timer.Interval = 1000
-            $timer.AutoReset = $true
+    # Εσωτερικό container
+    $innerBorder = New-Object System.Windows.Controls.Border
+    $innerBorder.CornerRadius = New-Object System.Windows.CornerRadius(12)
+    $innerBorder.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(25, 25, 25),
+        [System.Windows.Media.Color]::FromRgb(15, 15, 15),
+        45
+    )
+    $innerBorder.Margin = New-Object System.Windows.Thickness(10)
+    $innerBorder.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(60, 60, 60),
+        [System.Windows.Media.Color]::FromRgb(30, 30, 30),
+        225
+    )
+    $innerBorder.BorderThickness = New-Object System.Windows.Thickness(1)
 
-            # .NET event (όχι Register-ObjectEvent) για να κρατήσουμε το ίδιο runspace
-            $null = $timer.add_Elapsed({
-                try {
-                    if (Test-Path "C:\Temp\systemscan.done") {
-                        $timer.Stop()
+    $stackPanel = New-Object System.Windows.Controls.StackPanel
+    $stackPanel.Margin = New-Object System.Windows.Thickness(25)
 
-                        # ενημέρωση UI ΠΑΝΤΑ με Dispatcher του Application.Current (ίδιο UI thread)
-                        $disp = [System.Windows.Application]::Current.Dispatcher
-                        if ($null -ne $disp) {
-                            $disp.Invoke([System.Action]{
-                                if ($null -ne $MaintenanceProgressBar) {
-                                    $MaintenanceProgressBar.IsIndeterminate = $false
-                                    $MaintenanceProgressBar.Visibility = 'Collapsed'
-                                }
-                                if ($null -ne $MaintenanceStatusText) {
-                                    $MaintenanceStatusText.Text = "Ολοκληρώθηκε!"
-                                }
-                            })
-                        }
+    # Τίτλος με gradient
+    $titleText = New-Object System.Windows.Controls.TextBlock
+    $titleText.FontSize = 20
+    $titleText.FontWeight = "Bold"
+    $titleText.Margin = New-Object System.Windows.Thickness(0,0,0,15)
+    $titleText.Foreground = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(220, 220, 220),
+        [System.Windows.Media.Color]::FromRgb(180, 180, 180),
+        0
+    )
+    $titleText.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{
+        Color = [System.Windows.Media.Colors]::Black
+        ShadowDepth = 1
+        BlurRadius = 2
+        Opacity = 0.6
+    }
 
-                        # καθάρισμα marker
-                        Remove-Item "C:\Temp\systemscan.done" -Force -ErrorAction SilentlyContinue
-                        $timer.Dispose()
-                    }
-                } catch {
-                    # ignore
+    # Μήnυμα
+    $messageText = New-Object System.Windows.Controls.TextBlock
+    $messageText.Foreground = New-Object System.Windows.Media.SolidColorBrush(
+        [System.Windows.Media.Color]::FromRgb(180, 180, 180)
+    )
+    $messageText.TextWrapping = "Wrap"
+    $messageText.Margin = New-Object System.Windows.Thickness(0,0,0,25)
+    $messageText.FontSize = 14
+
+    $titleText.Text = $t.systemScanTitle
+    $messageText.Text = $t.systemScanMessage
+
+    # Κουμπιά με 3D εφέ
+    $buttonPanel = New-Object System.Windows.Controls.StackPanel
+    $buttonPanel.Orientation = "Horizontal"
+    $buttonPanel.HorizontalAlignment = "Right"
+    $buttonPanel.Margin = New-Object System.Windows.Thickness(0,10,0,0)
+
+    # Cancel button με 3D εφέ και κυκλικές γωνίες
+    $cancelButton = New-Object System.Windows.Controls.Button
+    $cancelButton.Width = 100
+    $cancelButton.Height = 35
+    $cancelButton.Margin = New-Object System.Windows.Thickness(0,0,10,0)
+    $cancelButton.Content = $t.systemScanCancel
+    $cancelButton.IsCancel = $true
+    $cancelButton.FontWeight = "SemiBold"
+    
+    # Δημιουργία Template για κουμπί με κυκλικές γωνίες
+    $buttonTemplate = @'
+<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 TargetType="Button">
+    <Border x:Name="border"
+            CornerRadius="8"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}">
+        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+        </Trigger>
+        <Trigger Property="IsPressed" Value="True">
+            <Setter TargetName="border" Property="Opacity" Value="0.6"/>
+        </Trigger>
+    </ControlTemplate.Triggers>
+</ControlTemplate>
+'@
+
+    # Εφαρμογή του template στα κουμπιά
+    $cancelButton.Template  = [System.Windows.Markup.XamlReader]::Parse($buttonTemplate)
+    $cancelButton.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        [System.Windows.Media.Color]::FromRgb(60, 60, 60),
+        90
+    )
+    $cancelButton.Foreground = [System.Windows.Media.Brushes]::White
+    $cancelButton.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(120, 120, 120),
+        [System.Windows.Media.Color]::FromRgb(80, 80, 80),
+        270
+    )
+    $cancelButton.BorderThickness = New-Object System.Windows.Thickness(1)
+    $cancelButton.Add_Click({
+        $window.IsEnabled = $true
+        $dialog.Close()
+    })
+
+    # Confirm button με έντονο 3D εφέ
+    $confirmButton = New-Object System.Windows.Controls.Button
+    $confirmButton.Width = 100
+    $confirmButton.Height = 35
+    $confirmButton.IsDefault = $true
+    $confirmButton.FontWeight = "Bold"
+    
+    # Εφαρμογή του ίδιου template
+    $confirmButton.Template = [System.Windows.Markup.XamlReader]::Parse($buttonTemplate)
+    $confirmButton.Background = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(0, 120, 215),
+        [System.Windows.Media.Color]::FromRgb(0, 80, 180),
+        90
+    )
+    $confirmButton.Foreground = [System.Windows.Media.Brushes]::White
+    $confirmButton.BorderBrush = New-Object System.Windows.Media.LinearGradientBrush(
+        [System.Windows.Media.Color]::FromRgb(0, 160, 255),
+        [System.Windows.Media.Color]::FromRgb(0, 100, 200),
+        270
+    )
+    $confirmButton.BorderThickness = New-Object System.Windows.Thickness(1)
+    
+    # 3D shadow για τα κουμπιά
+    $buttonShadow = New-Object System.Windows.Media.Effects.DropShadowEffect
+    $buttonShadow.Color = [System.Windows.Media.Colors]::Black
+    $buttonShadow.ShadowDepth = 2
+    $buttonShadow.BlurRadius = 4
+    $buttonShadow.Opacity = 0.5
+    $confirmButton.Effect = $buttonShadow
+    $cancelButton.Effect = $buttonShadow
+
+    $confirmButton.Content = $t.systemScanConfirm
+    $confirmButton.Add_Click({
+        $window.IsEnabled = $true
+        $dialog.Close()
+        
+        # Άμεση εκκίνηση της σάρωσης - το UAC prompt θα εμφανιστεί αυτόματα από το Windows
+        # όταν χρησιμοποιήσουμε το -Verb RunAs
+        Start-SystemScan
+    })
+
+    # Build hierarchy
+    [void]$buttonPanel.Children.Add($cancelButton)
+    [void]$buttonPanel.Children.Add($confirmButton)
+    [void]$stackPanel.Children.Add($titleText)
+    [void]$stackPanel.Children.Add($messageText)
+    [void]$stackPanel.Children.Add($buttonPanel)
+    
+    $innerBorder.Child = $stackPanel
+    $mainBorder.Child = $innerBorder
+    $dialog.Content = $mainBorder
+
+    $dialog.Add_Closed({ $window.IsEnabled = $true })
+    [void]$dialog.ShowDialog()
+}
+
+function Start-SystemScan {
+    try {
+        # --- UI: start state ---
+        $uiDisp = [System.Windows.Application]::Current.Dispatcher
+        if ($null -ne $uiDisp) {
+            $uiDisp.Invoke([System.Action]{
+                if ($null -ne $MaintenanceProgressBar) {
+                    $MaintenanceProgressBar.IsIndeterminate = $true
+                    $MaintenanceProgressBar.Visibility = 'Visible'
+                }
+                if ($null -ne $MaintenanceStatusText) {
+                    $MaintenanceStatusText.Text = "Εκτελείται SFC και DISM..."
                 }
             })
-            $timer.Start()
         }
-        catch {
-            [System.Windows.MessageBox]::Show(
-                "Σφάλμα: $($_.Exception.Message)",
-                "Σφάλμα",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Error
-            ) | Out-Null
 
-            $uiDisp = [System.Windows.Application]::Current.Dispatcher
-            if ($null -ne $uiDisp) {
-                $uiDisp.Invoke([System.Action]{
-                    if ($null -ne $MaintenanceProgressBar) { $MaintenanceProgressBar.Visibility = 'Collapsed' }
-                    if ($null -ne $MaintenanceStatusText)  { $MaintenanceStatusText.Text = "Σφάλμα εκτέλεσης." }
-                })
-            }
+        # --- Sentinel file ---
+        $tempDir  = "C:\Temp"
+        if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force | Out-Null }
+        $sentinel = Join-Path $tempDir "systemscan.done"
+        if (Test-Path $sentinel) { Remove-Item $sentinel -Force -ErrorAction SilentlyContinue }
+
+        # --- Run CMD (visible), auto-close when done, then write sentinel ---
+        # Το -Verb RunAs θα προκαλέσει το UAC prompt αυτόματα αν χρειάζονται admin δικαιώματα
+        $cmdLine = 'sfc /scannow & dism /online /cleanup-image /restorehealth & echo done> "C:\Temp\systemscan.done"'
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmdLine -Verb RunAs -WindowStyle Normal | Out-Null
+
+        # --- Reliable UI update: Timer polls sentinel, Dispatcher updates UI on the UI thread ---
+        $timer = New-Object System.Timers.Timer
+        $timer.Interval = 1000
+        $timer.AutoReset = $true
+
+        $null = $timer.add_Elapsed({
+            try {
+                if (Test-Path "C:\Temp\systemscan.done") {
+                    $timer.Stop()
+
+                    $disp = [System.Windows.Application]::Current.Dispatcher
+                    if ($null -ne $disp) {
+                        $disp.Invoke([System.Action]{
+                            if ($null -ne $MaintenanceProgressBar) {
+                                $MaintenanceProgressBar.IsIndeterminate = $false
+                                $MaintenanceProgressBar.Visibility = 'Collapsed'
+                            }
+                            if ($null -ne $MaintenanceStatusText) {
+                                $MaintenanceStatusText.Text = "Ολοκληρώθηκε!"
+                            }
+                        })
+                    }
+
+                    Remove-Item "C:\Temp\systemscan.done" -Force -ErrorAction SilentlyContinue
+                    $timer.Dispose()
+                }
+            } catch {}
+        })
+        $timer.Start()
+    }
+    catch {
+        [System.Windows.MessageBox]::Show(
+            "Σφάλμα: $($_.Exception.Message)",
+            "Σφάλμα",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
+
+        $uiDisp = [System.Windows.Application]::Current.Dispatcher
+        if ($null -ne $uiDisp) {
+            $uiDisp.Invoke([System.Action]{
+                if ($null -ne $MaintenanceProgressBar) { $MaintenanceProgressBar.Visibility = 'Collapsed' }
+                if ($null -ne $MaintenanceStatusText)  { $MaintenanceStatusText.Text = "Σφάλμα εκτέλεσης." }
+            })
         }
+    }
+}
+
+# Τροποποίηση του event handler για το SystemScanBtn
+if ($null -ne $SystemScanBtn) {
+    $null = $SystemScanBtn.Add_Click({
+        Show-SystemScanDialog
     })
 }
 
