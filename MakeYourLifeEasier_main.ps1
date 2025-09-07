@@ -1,27 +1,19 @@
-﻿# Make Your Life Easier – Modern WPF (2025, clean titlebar + modern switches + toast + scrollbars + rounded)
-# - PowerShell 5 compatible
-# - Saves/loads settings at %APPDATA%\Kolokithes A.E\settings.json
-# - Greek/English only
-# - Solid Light/Dark theming
-# - Minimal modern ScrollBars (auto dark/light)
-# - Stable rounded outline via RectangleGeometry clip
-# - Titlebar: custom Close/Minimize (hover/position fixed), icon added next to title, app icon for taskbar
-# - Profile: modern switches for Notifications/Sound/Theme + "Test notification"
-# - Toast banner (bottom-right) with optional sound (animated progress, theme-aware)
-# - Downloads hacker.ico from Dropbox if not present
-# - InstallBtn opens **Install page in-app** (no dialog)
+﻿# Make Your Life Easier – Modern WPF tool 
+# (PowerShell 5 compatible) featuring custom titlebar,
+# light/dark themes, notifications, 
+# toast banners, and asset management.
 
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Windows.Forms
 
-# Ensure System.Net.Http is loaded for HttpClient usage (PowerShell 5 compatibility)
+# Ensure System.Net.Http is loaded
 try {
     Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
 } catch {
-    # If the assembly cannot be loaded, the download functions will use fallback
+    # Fallback uses WebClient on failure
     Write-Verbose "System.Net.Http assembly could not be loaded: $($_.Exception.Message)"
 }
 
-# -------------------- P/Invoke for audio playback with volume control --------------------
+# P/Invoke definitions for audio playback.
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -44,7 +36,7 @@ public class Audio {
 }
 "@
 
-# -------------------- Paths & Settings helpers --------------------
+# Path and settings helper functions
 $AppDir        = Join-Path $env:APPDATA 'Kolokithes A.E'
 $SettingsPath  = Join-Path $AppDir 'settings.json'
 $DownloadsDir = Join-Path $AppDir 'downloads'
@@ -60,17 +52,7 @@ $IconFilePath  = Join-Path $AssetsMiscDir 'hacker.ico'
 if (-not (Test-Path $AppDir)) { New-Item -ItemType Directory -Force -Path $AppDir | Out-Null }
 
 <#
-Utility functions for downloading files and working with the Kolokithes A.E data directory.
-These helpers ensure that all downloads (executables, images, etc.) are stored under
-%APPDATA%\Kolokithes A.E and that this directory is created if it does not exist.
--- Get-KolokithesDataRoot: returns the path to the application data root, creating
-   the folder if necessary.
--- Get-DownloadPath: given a filename, returns its full path inside the data root.
--- Invoke-FileDownload: downloads a file from a URL to a destination path, using
-   Invoke-WebRequest and falling back to WebClient when necessary.
--- Initialize-ActivationImages: downloads the Activate/AutoLogin images from the
-   remote repository if they are missing, then applies them to the corresponding
-   image borders in the UI.  This should be called after the XAML is loaded.
+Simplified helper overview: functions manage the Kolokithes A.E data directory, download files into it and prepare activation images.
 #>
 function Get-KolokithesDataRoot {
     $root = Join-Path $env:APPDATA 'Kolokithes A.E'
@@ -82,20 +64,7 @@ function Get-KolokithesDataRoot {
 
 function Get-AppPaths {
     <#
-    Returns a dictionary of important asset paths under the application data root.  The
-    application stores its assets in structured subdirectories of
-    `%APPDATA%\Kolokithes A.E` so that users can easily locate and inspect them.
-    The structure is as follows:
-
-        %APPDATA%\Kolokithes A.E\assets\config\i18n.psd1
-                                             \Set-Language_additions.ps1
-                                      \images\activate.png
-                                             \autologin.png
-                                      \ui    \App.xaml
-
-    The helper ensures that each of these directories exists before returning the
-    computed paths.  Call this whenever you need to retrieve or create the
-    asset tree.
+    Return a dictionary of asset paths under %APPDATA%\Kolokithes A.E and ensure subdirectories exist.
     #>
     $root       = Get-KolokithesDataRoot
     $assetsDir  = Join-Path $root 'assets'
@@ -122,12 +91,7 @@ function Get-AppPaths {
 
 function Initialize-AppAssets {
     <#
-    Ensures that all core application assets exist in the application data
-    directory.  If any of the required files are missing or empty (length
-    zero), they are downloaded from the upstream repository.  The function
-    returns the same dictionary as Get-AppPaths so callers can retrieve the
-    absolute paths immediately after initialization.  Use the -Force switch to
-    force re-download of the assets even if they already exist.
+    Ensure required core assets exist; download any missing files and return asset paths.
     #>
     param([switch]$Force)
     $p = Get-AppPaths
@@ -233,14 +197,14 @@ function Initialize-ActivationImages {
     }
 }
 
-# -------------------- WebView2 cache paths --------------------
+# WebView2 cache paths
 # To avoid downloading the WebView2 NuGet package on every run, cache
 # the package and its extracted DLLs under the application data folder.
 $WebView2LibDir   = Join-Path $AppDir 'WebView2Lib'
 $WebView2PkgPath  = Join-Path $WebView2LibDir 'Microsoft.Web.WebView2.nupkg'
 $WebView2PkgUnzip = Join-Path $WebView2LibDir 'pkg'
 
-# -------------------- Download Icon if Missing --------------------
+# Download icon if missing
 function Get-Icon {
     if (-not (Test-Path $IconFilePath)) {
         try {
@@ -252,7 +216,7 @@ function Get-Icon {
 }
 Get-Icon
 
-# -------------------- WebView2 helper functions --------------------
+# WebView2 helper functions
 #
 # Test-WebView2Runtime: checks if the Microsoft Edge WebView2 runtime is
 # installed by looking for its registry key. Returns $true if found,
@@ -478,7 +442,7 @@ function Set-Brush([string]$key,[string]$hex){
     else { $br.Color = $clr.Color }
 }
 
-# -------------------- Load XAML --------------------
+# Load XAML
 # Before loading the UI, ensure all required assets are present and downloaded.
 $Paths = Initialize-AppAssets  # Creates folders and downloads App.xaml/i18n/images as needed
 # Read the XAML from the assets directory under %APPDATA%\Kolokithes A.E
@@ -1138,10 +1102,7 @@ $script:CurrentBold  = $false
 
 function Save-BaseMetrics {
     <#
-        Capture the initial FontSize, FontWeight, Height and Padding
-        for a predefined list of controls.  This must run before
-        applying any scaling so that subsequent scales multiply the
-        original values rather than accumulating error.
+        Store initial font sizes, weights, heights and paddings for controls before scaling.
     #>
     if ($script:BaseMetricsCollected) { return }
     # List of elements to consider for scaling.  Modify this list to
@@ -1197,10 +1158,7 @@ function Save-BaseMetrics {
 
 function Get-ScaleFactor {
     <#
-        Given a window width, return an appropriate scale factor.  The
-        piecewise mapping below results in progressively larger
-        typography for higher resolutions.  Feel free to tweak the
-        thresholds or factors if the UI still appears too small.
+        Determine a scale factor based on window width.
     #>
     param([double]$width)
     if ($width -le 854) { return 1.0 }
@@ -1212,10 +1170,7 @@ function Get-ScaleFactor {
 
 function Set-BoldWeight {
     <#
-        Apply the given scale factor to all stored controls.  For very
-        small resolutions (≤480p), set FontWeight to Bold; otherwise
-        restore the original weight.  Heights and paddings are scaled
-        proportionally when available.
+        Apply scale and boldness to stored controls based on resolution.
     #>
     param(
         [Parameter(Mandatory)][double]$scale,
