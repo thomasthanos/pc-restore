@@ -47,8 +47,16 @@ public class Audio {
 # -------------------- Paths & Settings helpers --------------------
 $AppDir        = Join-Path $env:APPDATA 'Kolokithes A.E'
 $SettingsPath  = Join-Path $AppDir 'settings.json'
-$SoundFilePath = Join-Path $AppDir 'click.wav'
-$IconFilePath  = Join-Path $AppDir 'hacker.ico'
+$DownloadsDir = Join-Path $AppDir 'downloads'
+$AssetsMiscDir = Join-Path (Join-Path $AppDir 'assets') 'misc'
+# ensure custom directories exist
+foreach ($dir in @($DownloadsDir, $AssetsMiscDir)) {
+    if (-not (Test-Path $dir)) {
+        try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
+    }
+}
+$SoundFilePath = Join-Path $AssetsMiscDir 'click.wav'
+$IconFilePath  = Join-Path $AssetsMiscDir 'hacker.ico'
 if (-not (Test-Path $AppDir)) { New-Item -ItemType Directory -Force -Path $AppDir | Out-Null }
 
 <#
@@ -153,7 +161,12 @@ function Initialize-AppAssets {
 function Get-DownloadPath {
     param([Parameter(Mandatory)][string]$FileName)
     $root = Get-KolokithesDataRoot
-    return Join-Path $root $FileName
+    # ensure downloads folder exists under the application data root
+    $downloadsDir = Join-Path $root 'downloads'
+    if (-not (Test-Path $downloadsDir)) {
+        try { New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null } catch {}
+    }
+    return Join-Path $downloadsDir $FileName
 }
 
 function Invoke-FileDownload {
