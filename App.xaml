@@ -752,6 +752,7 @@
                         <StackPanel Grid.Row="12" Margin="12,0,12,8">
                             <Button x:Name="InfoBtn" Content="Info" Style="{StaticResource PillButton}" Margin="0,0,0,8"/>
                             <Button x:Name="BiosBtn" Content="BIOS" Style="{StaticResource PillButton}"/>
+                            <Button x:Name="UpdaterBtn" Content="Updater" Style="{StaticResource PillButton}"/>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
@@ -1122,6 +1123,33 @@
 
 
 
+                        <!-- Updater page -->
+                        <Grid x:Name="UpdaterContent" Visibility="Collapsed">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
+                                <StackPanel Margin="24">
+                                    <TextBlock Text="Updater" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
+                                    <!-- Version card -->
+                                    <Border CornerRadius="12" Background="{DynamicResource CardBg}" Padding="16" Margin="0,0,0,16">
+                                        <StackPanel>
+                                            <TextBlock Text="Version" Foreground="{DynamicResource MutedText}" Margin="0,0,0,6"/>
+                                            <TextBlock x:Name="UpdaterVersion" Text="—" FontSize="18" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <!-- Update action card -->
+                                    <Border CornerRadius="12" Background="{DynamicResource CardBg}" Padding="16">
+                                        <StackPanel>
+                                            <TextBlock Text="Update" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                                            <ProgressBar x:Name="UpdaterProgress" Style="{StaticResource InstallProgressBar}" Height="8" Minimum="0" Maximum="100"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                                <Button x:Name="UpdateNowBtn" Content="Update" Style="{StaticResource PrimaryButton}" Height="44" Padding="20,10"/>
+                                                <TextBlock x:Name="UpdateStatus" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
                         <!-- Spotify Page -->
                         <Grid x:Name="SpotifyContent" Visibility="Collapsed">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
@@ -1458,7 +1486,7 @@
                                     </Border>
 
                                     <!-- Version and Copyright -->
-                                    <TextBlock x:Name="VersionLabel" Text="Έκδοση: 2.0.0" Margin="0,20,0,8" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock x:Name="VersionLabel" Text="Έκδοση: 1.1.0" Margin="0,20,0,8" Foreground="{DynamicResource MutedText}"/>
                                     <TextBlock x:Name="CopyrightLabel" Text="© 2025 Make Your Life Easier" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </ScrollViewer>

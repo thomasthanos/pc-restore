@@ -5,6 +5,23 @@
 
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Windows.Forms
 
+# ---------------------------------------------------------------------------
+# Single instance guard
+# Use a named mutex to ensure only one instance of the application is running.
+# If another instance already holds the mutex, shut down the current process
+# immediately.  This prevents duplicate launches and endless relaunch loops
+# during updates.
+$createdNewInstance = $false
+$global:AppMutex = New-Object System.Threading.Mutex($false, 'Global\Kolokithes-MYLE-App', [ref]$createdNewInstance)
+if (-not $createdNewInstance) {
+    try {
+        [System.Windows.Application]::Current.Shutdown()
+    } catch {
+        Stop-Process -Id $PID -Force
+    }
+    return
+}
+
 # Ensure System.Net.Http is loaded
 try {
     Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
@@ -494,6 +511,50 @@ $passwordManagerBtn = $window.FindName('PasswordManagerBtn')
 $chrisTitusBtn      = $window.FindName('ChrisTitusBtn')
 $simsBtn            = $window.FindName('SimsBtn')
 $BiosBtn            = $window.FindName('BiosBtn')
+ # Updater controls (no assignment of UpdaterContent because it's not used)
+ $updaterBtn      = $window.FindName('UpdaterBtn')
+ $UpdaterVersion  = $window.FindName('UpdaterVersion')
+ $UpdaterProgress = $window.FindName('UpdaterProgress')
+ $UpdateNowBtn    = $window.FindName('UpdateNowBtn')
+ $UpdateStatus    = $window.FindName('UpdateStatus')
+ # Persistent updater state (store last updated version).
+ # Determine a safe directory to store the update state file. If $Paths and its
+ # ConfigDir property are defined, use that. Otherwise fall back to the assets\config
+ # directory under the Kolokithes data root. Ensure the directory exists before
+ # constructing the path. This avoids null-path errors when $Paths is not initialized.
+ $stateRoot = if ($Paths -and $Paths.ConfigDir) { $Paths.ConfigDir } else { Join-Path (Get-KolokithesDataRoot) 'assets\config' }
+ if (-not (Test-Path $stateRoot)) { New-Item -ItemType Directory -Force -Path $stateRoot | Out-Null }
+ $script:UpdateStateFile = Join-Path $stateRoot 'update.state.json'
+ $script:LastUpdatedTo   = $null
+
+        # ---------------------------------------------------------------------------
+        # Restart sentinel and helper
+        # A file marker used to detect whether the application has been restarted
+        # as part of an update.  When the update runs, a sentinel is written so that
+        # any auto-launch watchers can skip launching additional instances.  The
+        # sentinel is removed on startup (SourceInitialized).  If you need to
+        # change the path, update $stateRoot accordingly.
+        $script:RestartSentinel = Join-Path $stateRoot 'restart.once'
+
+        function Restart-ApplicationOnce {
+            try {
+                # Write a timestamp to the sentinel so any external watcher knows not to relaunch
+                Set-Content -Path $script:RestartSentinel -Value (Get-Date) -Encoding UTF8
+            } catch {}
+            try {
+                # Determine the executable of the current process
+                $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+                # Start a new instance of the application.  Pass a flag so
+                # debugging or future logic can detect that this run follows an update.
+                Start-Process -FilePath $exePath -ArgumentList '--after-update'
+            } catch {}
+            # Gracefully shut down the current application
+            try {
+                [System.Windows.Application]::Current.Shutdown()
+            } catch {
+                Stop-Process -Id $PID -Force
+            }
+        }
 # Apps page controls
 $script:AppsDownloadsPanel  = $window.FindName('AppsButtonsPanel')
 $script:AppsOverallProgress = $window.FindName('AppsOverallProgressBar')
@@ -522,7 +583,14 @@ function Update-AppsSpacing {
 }
 
 # Initialize spacing immediately once the window is created
-$null = $window.Add_SourceInitialized({ Update-AppsSpacing })
+$null = $window.Add_SourceInitialized({
+    Update-AppsSpacing
+    Update-UpdaterUI
+    # Remove restart sentinel on startup so relaunch watchers don't skip starting
+    try {
+        if (Test-Path $script:RestartSentinel) { Remove-Item $script:RestartSentinel -Force }
+    } catch {}
+})
 # Update spacing when the window size changes
 $null = $window.Add_SizeChanged({ Update-AppsSpacing })
 $null = $appsBtn.Add_Click({ Show-Content 'Apps'; Initialize-AppsPageUI })
@@ -533,6 +601,17 @@ if ($spotifyBtn)         { $null = $spotifyBtn.Add_Click({ Show-Content 'Spotify
 if ($passwordManagerBtn) { $null = $passwordManagerBtn.Add_Click({ Show-Content 'PasswordManager' }) }
 if ($chrisTitusBtn)      { $null = $chrisTitusBtn.Add_Click({ Show-Content 'ChrisTitus' }) }
 if ($simsBtn)            { $null = $simsBtn.Add_Click({ Show-Content 'Sims' }) }
+
+# Attach click events for updater and update button
+if ($updaterBtn) {
+    $null = $updaterBtn.Add_Click({ Show-Content 'Updater' })
+}
+if ($UpdateNowBtn) {
+    # When clicked, run a dedicated function to perform the update. Keeping the
+    # function separate simplifies the click handler and avoids nested
+    # scriptblocks that can cause parsing issues.
+    $null = $UpdateNowBtn.Add_Click({ Invoke-UpdaterUpdate })
+}
 
 # Text/UI elements for i18n
 $TitleText   = $window.FindName('TitleText')
@@ -1238,6 +1317,210 @@ if (Test-Path $translationsPath) {
     Write-Host "Warning: i18n.psd1 not found at $translationsPath. Using built-in English strings only."
 }
 
+function Get-CurrentVersion {
+    try {
+        $verLabel = $window.FindName('VersionLabel')
+        if ($null -ne $verLabel) {
+            $verText = $verLabel.Text
+            $v = ($verText -replace '.*?:\s*','').Trim()
+            return [version]$v
+        }
+        return [version]'0.0.0'
+    } catch {
+        return [version]'0.0.0'
+    }
+}
+
+function Get-LatestVersion {
+    param([string]$VerInfoUrl)
+    <#
+        Retrieve the latest version from a JSON endpoint.  This helper
+        adds a cache‑busting timestamp parameter to the URL and sets
+        HTTP headers to avoid stale caches.  A short timeout is used
+        to prevent the UI from freezing if the endpoint is slow.  In
+        case of failure, $null is returned.
+    #>
+    try {
+        if (-not $VerInfoUrl) { return $null }
+        # Append a cache‑buster query parameter.  If the URL already
+        # contains a query string, append with &; otherwise, use ?.
+        $url = $VerInfoUrl
+        try {
+            $ts = [int][DateTime]::UtcNow.Subtract([DateTime]'1970-01-01').TotalSeconds
+            if ($url -match '\?') { $url = "$url&ts=$ts" } else { $url = "$url?ts=$ts" }
+        } catch { }
+        $json = $null
+        try {
+            # Use HttpClient with no‑cache headers and a short timeout
+            $client = New-Object System.Net.Http.HttpClient
+            $client.DefaultRequestHeaders.CacheControl = New-Object System.Net.Http.Headers.CacheControlHeaderValue
+            $client.DefaultRequestHeaders.CacheControl.NoCache = $true
+            $client.DefaultRequestHeaders.Pragma.Add((New-Object System.Net.Http.Headers.NameValueHeaderValue('no-cache')))
+            $client.Timeout = [TimeSpan]::FromSeconds(3)
+            $json = $client.GetStringAsync($url).GetAwaiter().GetResult()
+            $client.Dispose()
+        } catch {
+            try {
+                # Fallback to WebClient with no‑cache headers
+                $wc = New-Object Net.WebClient
+                $wc.Headers.Add('Cache-Control','no-cache')
+                $wc.Headers.Add('Pragma','no-cache')
+                $json = $wc.DownloadString($url)
+                $wc.Dispose()
+            } catch {
+                $json = $null
+            }
+        }
+        if (-not $json) { return $null }
+        try {
+            $obj = $json | ConvertFrom-Json
+            if ($obj.version) { return [version]$obj.version }
+            return $null
+        } catch {
+            return $null
+        }
+    } catch {
+        return $null
+    }
+}
+
+function Update-UpdaterUI {
+    # Load persisted state if it exists
+    try {
+        if (Test-Path $script:UpdateStateFile) {
+            $state = Get-Content $script:UpdateStateFile -Raw | ConvertFrom-Json
+            if ($state.lastUpdatedTo) { $script:LastUpdatedTo = [version]$state.lastUpdatedTo }
+        }
+    } catch { }
+    $cur = Get-CurrentVersion
+    if ($UpdaterVersion) { $UpdaterVersion.Text = "Τρέχουσα: $cur" }
+    $VerInfoUrl   = 'https://www.dropbox.com/scl/fi/3l8ycvkp89459q99alkvo/version.json?rlkey=pyy5xmfnpemxfr5ss8y6vr0b3&st=h370dkz9&dl=1'
+    $lat = Get-LatestVersion -VerInfoUrl $VerInfoUrl
+    $alreadyUpdated = $false
+    if ($script:LastUpdatedTo -and $lat -and $script:LastUpdatedTo -ge $lat) { $alreadyUpdated = $true }
+    # Decide UI state based on version comparison and network response.  If the
+    # version check fails ($lat is null), allow the user to retry by keeping
+    # the button enabled.  Otherwise, enable the button only when an update
+    # is available.
+    if (-not $lat) {
+        # Could not fetch the latest version; allow manual retry
+        if ($UpdaterVersion) { $UpdaterVersion.ClearValue([System.Windows.Controls.TextBlock]::ForegroundProperty) }
+        if ($UpdateStatus)   { $UpdateStatus.Text = "Αποτυχία ελέγχου ενημέρωσης" }
+        if ($UpdateNowBtn)   { $UpdateNowBtn.IsEnabled = $true }
+    } elseif ($lat -and $cur -lt $lat -and -not $alreadyUpdated) {
+        # Newer version available: highlight version in red and display notice
+        if ($UpdaterVersion) { $UpdaterVersion.Foreground = [Windows.Media.Brushes]::Red }
+        if ($UpdateStatus)   { $UpdateStatus.Text = "Διαθέσιμη ενημέρωση: v$lat" }
+        if ($UpdateNowBtn)   { $UpdateNowBtn.IsEnabled = $true }
+    } else {
+        # No update available: clear highlight and disable the button
+        if ($UpdaterVersion) { $UpdaterVersion.ClearValue([System.Windows.Controls.TextBlock]::ForegroundProperty) }
+        if ($UpdateStatus)   { $UpdateStatus.Text = "Είσαι ενημερωμένος" }
+        if ($UpdateNowBtn)   { $UpdateNowBtn.IsEnabled = $false }
+    }
+
+}
+
+# Performs the update when the user clicks the Update button. This helper
+# encapsulates the update logic in a single place so the click handler can
+# simply invoke it. It checks whether the update has already been applied,
+# shows progress, calls Invoke-CheckForUpdates, persists the state, and
+# refreshes the UI at the end.
+function Invoke-UpdaterUpdate {
+    # This helper performs the update when the user clicks the button.  It
+    # re‑checks whether an update is actually available and only launches
+    # the updater if needed.  On failure, the button is re‑enabled so the
+    # user can try again.  A controlled restart is initiated only if the
+    # update succeeded.
+    $updateSucceeded = $false
+    try {
+        # Indicate that an update check/installation is in progress.
+        if ($UpdaterProgress) { $UpdaterProgress.IsIndeterminate = $true }
+        if ($UpdateStatus)    { $UpdateStatus.Text = 'Γίνεται ενημέρωση…' }
+
+        # Define the version information URL and updater script location.  This
+        # should match the same URL used in Update-UpdaterUI.  You can extract
+        # this into a variable or config if desired.
+        $VerInfoUrl  = 'https://www.dropbox.com/scl/fi/3l8ycvkp89459q99alkvo/version.json?rlkey=pyy5xmfnpemxfr5ss8y6vr0b3&st=h370dkz9&dl=1'
+        $AppDir      = Join-Path $env:APPDATA 'Kolokithes A.E'
+        $UpdaterPath = Join-Path $AppDir 'Updater.ps1'
+
+        # Re-fetch the latest version and compare with current.  This
+        # re-check ensures we don't perform unnecessary updates or run
+        # the updater when the network is down.
+        $currentVersion = Get-CurrentVersion
+        $latestVersion  = Get-LatestVersion -VerInfoUrl $VerInfoUrl
+        $alreadyUpdated = $false
+        if ($script:LastUpdatedTo -and $latestVersion -and $script:LastUpdatedTo -ge $latestVersion) { $alreadyUpdated = $true }
+
+        if (-not $latestVersion -or $currentVersion -ge $latestVersion -or $alreadyUpdated) {
+            # No newer version is available.  Inform the user and re-enable the button.
+            if ($UpdateStatus) { $UpdateStatus.Text = 'Δεν υπάρχει διαθέσιμη ενημέρωση.' }
+            return
+        }
+
+        # At this point an update is available.  Validate that the updater script exists.
+        if (-not (Test-Path $UpdaterPath)) {
+            [System.Windows.MessageBox]::Show('Δεν βρέθηκε το Updater.ps1. Βεβαιώσου ότι βρίσκεται στον φάκελο της εφαρμογής.') | Out-Null
+            return
+        }
+
+        # Construct arguments for the updater.  Pass --norestart to prevent
+        # the updater from relaunching the application itself — we handle
+        # the restart here.  Use -Wait to block until the updater finishes
+        # so we know whether it succeeded.
+        $updArgs = @(
+            '-NoProfile',
+            '-ExecutionPolicy','Bypass',
+            '-File', "`"$UpdaterPath`"",
+            '-VerInfoUrl', "`"$VerInfoUrl`"",
+            '--norestart'
+        )
+
+        try {
+            $process = Start-Process 'powershell.exe' -ArgumentList $updArgs -WindowStyle Hidden -PassThru -Wait
+            # If the process exits with a success code (0), assume update succeeded.
+            if ($process.ExitCode -eq 0) {
+                $updateSucceeded = $true
+            }
+        } catch {
+            # Swallow any exception from Start-Process; updateSucceeded remains false.
+        }
+
+        if ($updateSucceeded) {
+            # Persist the new version to the state file to avoid prompting for
+            # the same version again.  Ignore any errors writing the file.
+            try {
+                $state2 = @{ lastUpdatedTo = $latestVersion.ToString() }
+                $stateDir = Split-Path -Parent $script:UpdateStateFile
+                New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+                $state2 | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $script:UpdateStateFile
+                $script:LastUpdatedTo = $latestVersion
+            } catch {}
+
+            # Initiate a controlled restart.  The restart sentinel prevents
+            # loops and ensures only one new instance starts.
+            Restart-ApplicationOnce
+            return
+        } else {
+            # Update failed.  Show a message and allow the user to retry.
+            if ($UpdateStatus) { $UpdateStatus.Text = 'Η ενημέρωση απέτυχε. Προσπάθησε ξανά.' }
+            return
+        }
+    } catch {
+        # On unexpected errors, show a generic failure message.  Do not crash
+        # the application; simply allow the user to retry.
+        if ($UpdateStatus) { $UpdateStatus.Text = 'Παρουσιάστηκε σφάλμα κατά την ενημέρωση.' }
+        return
+    } finally {
+        # Always clear the indeterminate progress and refresh the UI.  This
+        # ensures the user can click the button again even if the update
+        # failed or there was no update available.
+        if ($UpdaterProgress) { $UpdaterProgress.IsIndeterminate = $false }
+        Update-UpdaterUI
+    }
+}
+
 # -------------------- Page switching --------------------
 function Show-Content([string]$name){
     # Include all content pages, including newly added ones (Spotify, Password Manager, ChrisTitus, Sims).
@@ -1252,11 +1535,12 @@ function Show-Content([string]$name){
         $window.FindName('SpotifyContent'),
         $window.FindName('PasswordManagerContent'),
         $window.FindName('ChrisTitusContent'),
-        $window.FindName('SimsContent')
+        $window.FindName('SimsContent'),
+        $window.FindName('UpdaterContent')
     )
     foreach($g in $all){ if($g){ $g.Visibility = [System.Windows.Visibility]::Collapsed } }
 
-    foreach($b in @($profileBtn,$installBtn,$activateBtn,$maintenanceBtn,$sitesBtn,$appsBtn,$infoBtn,$spotifyBtn,$passwordManagerBtn,$chrisTitusBtn,$simsBtn)){
+    foreach($b in @($profileBtn,$installBtn,$activateBtn,$maintenanceBtn,$sitesBtn,$appsBtn,$infoBtn,$spotifyBtn,$passwordManagerBtn,$chrisTitusBtn,$simsBtn,$updaterBtn)){
         if($b){ $b.Style = $window.FindResource("PillButton") }
     }
 
@@ -1272,6 +1556,7 @@ function Show-Content([string]$name){
         'PasswordManager' { ($window.FindName('PasswordManagerContent')).Visibility='Visible'; if($passwordManagerBtn){ $passwordManagerBtn.Style=$window.FindResource("ActivePillButton") } }
         'ChrisTitus'  { ($window.FindName('ChrisTitusContent')).Visibility='Visible';  if($chrisTitusBtn){ $chrisTitusBtn.Style=$window.FindResource("ActivePillButton") } }
         'Sims'        { ($window.FindName('SimsContent')).Visibility='Visible';        if($simsBtn){ $simsBtn.Style=$window.FindResource("ActivePillButton") } }
+        'Updater'     { ($window.FindName('UpdaterContent')).Visibility='Visible';        if($updaterBtn){ $updaterBtn.Style=$window.FindResource("ActivePillButton") } ; Update-UpdaterUI }
     }
 
     # Reapply current bold settings to newly visible content.  When switching
@@ -3073,6 +3358,26 @@ $null = $window.Add_Closing({
 })
 
 
+function Invoke-CheckForUpdates {
+    # Μπορείς να παραμετροποιήσεις το URL του JSON, το όνομα του EXE κ.λπ. μέσω παραμέτρων αν θέλεις.
+    $VerInfoUrl   = 'https://www.dropbox.com/scl/fi/3l8ycvkp89459q99alkvo/version.json?rlkey=pyy5xmfnpemxfr5ss8y6vr0b3&st=h370dkz9&dl=1'   # URL προς το JSON με την τελευταία έκδοση
+    $AppDir       = Join-Path $env:APPDATA 'Kolokithes A.E'   # Ο φάκελος εγκατάστασης της εφαρμογής σου
+    $UpdaterPath  = Join-Path $AppDir 'Updater.ps1'           # Εκεί όπου αποθήκευσες το Updater.ps1
+
+    if (-not (Test-Path $UpdaterPath)) {
+        # Εμφάνισε μήνυμα ή λογική για να κατεβάσεις/αντιγράψεις το Updater.ps1 στον σωστό φάκελο
+        [System.Windows.MessageBox]::Show('Δεν βρέθηκε το Updater.ps1. Βεβαιώσου ότι βρίσκεται στον φάκελο της εφαρμογής.')
+        return
+    }
+
+    # Τρέχει το updater σιωπηρά σε νέο process, για να μην παγώσει το UI
+    Start-Process 'powershell.exe' -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', "`"$UpdaterPath`"",
+        '-VerInfoUrl', "`"$VerInfoUrl`""
+    ) -WindowStyle Hidden
+}
+ # Do not automatically run update at startup; updates run via the Update button.
 
 # -------------------- Initialize on load --------------------
 $null = $window.Add_Loaded({ Initialize-InstallPage })
