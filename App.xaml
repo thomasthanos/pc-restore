@@ -747,12 +747,24 @@
                         <StackPanel Grid.Row="9"  Margin="12,0,12,8"><Button x:Name="PasswordManagerBtn" Content="Password Manager"  Style="{StaticResource PillButton}"/></StackPanel>
                         <StackPanel Grid.Row="10" Margin="12,0,12,8"><Button x:Name="ChrisTitusBtn"      Content="ChrisTitus"        Style="{StaticResource PillButton}"/></StackPanel>
                         <StackPanel Grid.Row="11" Margin="12,0,12,8"><Button x:Name="SimsBtn"           Content="Sims"              Style="{StaticResource PillButton}"/></StackPanel>
-                        <!-- Info and BIOS buttons occupy the same row.  Nest both buttons in a single
-                             StackPanel so they render one after the other instead of overlapping. -->
+                        <!-- Info, BIOS and Updater buttons occupy the same row.  Nest all buttons in a single
+                             StackPanel so they render one after the other instead of overlapping.  Added Updater button
+                             below BIOS to ensure it appears underneath rather than side‑by‑side. -->
                         <StackPanel Grid.Row="12" Margin="12,0,12,8">
-                            <Button x:Name="InfoBtn" Content="Info" Style="{StaticResource PillButton}" Margin="0,0,0,8"/>
-                            <Button x:Name="BiosBtn" Content="BIOS" Style="{StaticResource PillButton}"/>
-                            <Button x:Name="UpdaterBtn" Content="Updater" Style="{StaticResource PillButton}"/>
+                            <!-- Info button -->
+                            <Button x:Name="InfoBtn"
+                                    Content="Info"
+                                    Style="{StaticResource PillButton}"
+                                    Margin="0,0,0,8"/>
+                            <!-- BIOS button -->
+                            <Button x:Name="BiosBtn"
+                                    Content="BIOS"
+                                    Style="{StaticResource PillButton}"
+                                    Margin="0,0,0,8"/>
+                            <!-- Updater button placed below BIOS.  Uses the same PillButton style and separate name so the code‑behind can bind to it. -->
+                            <Button x:Name="UpdaterBtn"
+                                    Content="Updater"
+                                    Style="{StaticResource PillButton}"/>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
@@ -1123,33 +1135,6 @@
 
 
 
-                        <!-- Updater page -->
-                        <Grid x:Name="UpdaterContent" Visibility="Collapsed">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
-                                <StackPanel Margin="24">
-                                    <TextBlock Text="Updater" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
-                                    <!-- Version card -->
-                                    <Border CornerRadius="12" Background="{DynamicResource CardBg}" Padding="16" Margin="0,0,0,16">
-                                        <StackPanel>
-                                            <TextBlock Text="Version" Foreground="{DynamicResource MutedText}" Margin="0,0,0,6"/>
-                                            <TextBlock x:Name="UpdaterVersion" Text="—" FontSize="18" FontWeight="SemiBold"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <!-- Update action card -->
-                                    <Border CornerRadius="12" Background="{DynamicResource CardBg}" Padding="16">
-                                        <StackPanel>
-                                            <TextBlock Text="Update" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                                            <ProgressBar x:Name="UpdaterProgress" Style="{StaticResource InstallProgressBar}" Height="8" Minimum="0" Maximum="100"/>
-                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                                <Button x:Name="UpdateNowBtn" Content="Update" Style="{StaticResource PrimaryButton}" Height="44" Padding="20,10"/>
-                                                <TextBlock x:Name="UpdateStatus" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-
                         <!-- Spotify Page -->
                         <Grid x:Name="SpotifyContent" Visibility="Collapsed">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
@@ -1423,6 +1408,43 @@
   </ScrollViewer>
 </Grid>
 
+
+                        <!-- Updater Page -->
+                        <Grid x:Name="UpdaterContent" Visibility="Collapsed">
+                            <!-- Updater page layout: vertical stack with current version, update status, progress bar and update button -->
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
+                                <StackPanel Margin="24">
+                                    <TextBlock x:Name="UpdaterTitle"
+                                               Text="Updater"
+                                               FontSize="24"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,20"/>
+                                    <!-- Displays the current application version.  Updated dynamically in PowerShell via Update-UpdaterUI -->
+                                    <TextBlock x:Name="UpdaterVersion"
+                                               Text="Τρέχουσα: -"
+                                               FontSize="16"
+                                               Margin="0,0,0,8"/>
+                                    <!-- Displays update status messages such as 'No update available' or 'Update available'. -->
+                                    <TextBlock x:Name="UpdateStatus"
+                                               Text=""
+                                               FontSize="14"
+                                               Foreground="{DynamicResource MutedText}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,16"/>
+                                    <!-- Progress bar shown when downloading or applying an update.  Styled like the install page bar. -->
+                                    <ProgressBar x:Name="UpdaterProgress"
+                                                 Minimum="0" Maximum="100"
+                                                 Style="{StaticResource InstallProgressBar}"
+                                                 Visibility="Collapsed"/>
+                                    <!-- Button to initiate update installation.  Disabled automatically when no update is available. -->
+                                    <Button x:Name="UpdateNowBtn"
+                                            Content="Update Now"
+                                            Style="{StaticResource PrimaryButton}"
+                                            Width="200" Height="40"
+                                            Margin="0,16,0,0"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
 
                         <!-- Info Panel -->
                         <Grid x:Name="InfoContent" Visibility="Collapsed">
