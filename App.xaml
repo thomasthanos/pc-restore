@@ -761,10 +761,7 @@
                                     Content="BIOS"
                                     Style="{StaticResource PillButton}"
                                     Margin="0,0,0,8"/>
-                            <!-- Updater button placed below BIOS.  Uses the same PillButton style and separate name so the code‑behind can bind to it. -->
-                            <Button x:Name="UpdaterBtn"
-                                    Content="Updater"
-                                    Style="{StaticResource PillButton}"/>
+                            <!-- Updater button removed: update functionality is disabled -->
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
@@ -1409,42 +1406,7 @@
 </Grid>
 
 
-                        <!-- Updater Page -->
-                        <Grid x:Name="UpdaterContent" Visibility="Collapsed">
-                            <!-- Updater page layout: vertical stack with current version, update status, progress bar and update button -->
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
-                                <StackPanel Margin="24">
-                                    <TextBlock x:Name="UpdaterTitle"
-                                               Text="Updater"
-                                               FontSize="24"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,20"/>
-                                    <!-- Displays the current application version.  Updated dynamically in PowerShell via Update-UpdaterUI -->
-                                    <TextBlock x:Name="UpdaterVersion"
-                                               Text="Τρέχουσα: -"
-                                               FontSize="16"
-                                               Margin="0,0,0,8"/>
-                                    <!-- Displays update status messages such as 'No update available' or 'Update available'. -->
-                                    <TextBlock x:Name="UpdateStatus"
-                                               Text=""
-                                               FontSize="14"
-                                               Foreground="{DynamicResource MutedText}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,0,0,16"/>
-                                    <!-- Progress bar shown when downloading or applying an update.  Styled like the install page bar. -->
-                                    <ProgressBar x:Name="UpdaterProgress"
-                                                 Minimum="0" Maximum="100"
-                                                 Style="{StaticResource InstallProgressBar}"
-                                                 Visibility="Collapsed"/>
-                                    <!-- Button to initiate update installation.  Disabled automatically when no update is available. -->
-                                    <Button x:Name="UpdateNowBtn"
-                                            Content="Update Now"
-                                            Style="{StaticResource PrimaryButton}"
-                                            Width="200" Height="40"
-                                            Margin="0,16,0,0"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
+                        <!-- Updater page removed: update functionality is disabled -->
 
                         <!-- Info Panel -->
                         <Grid x:Name="InfoContent" Visibility="Collapsed">
